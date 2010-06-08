@@ -1,0 +1,22 @@
+<%#
+# To change this template, choose Tools | Templates
+# and open the template in the editor.
+%>
+
+<title>Portfolio Analysis System</title>
+
+<h1>Portfolio Analysis System</h1><br/>
+<% if !@c.nil? %>
+  <b>Name:</b> <%= @c.get_name %><br/>
+  <b>Sector:</b> <%= @c.get_sector %><br/>
+  <b>Profile: </b> <%= @c.get_profile %><br/>
+  <b>Number of Historic Prices: </b>: <%= @c.data_points.size %><br/><br/>
+
+  <b>Historic Prices:</b><br/>
+  <% for data_point in @c.data_points %>
+  Date: <%= data_point.date %>, Open: <%= data_point.open %>,
+  High: <%= data_point.high %>, Low: <%= data_point.low %>,
+  Close: <%= data_point.close %>, Volume: <%= data_point.volume %>,
+  Adjusted Close: <%= data_point.adjusted_close %><br/>
+  <% end  %>
+<% end %>
