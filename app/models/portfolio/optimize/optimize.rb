@@ -7,8 +7,9 @@ module Portfolio
         DEFAULT_OPTIONS = { :test_size => 1e-16,
                             :max_iterations => 10000 }
                             
-        def self.optimize_over(portfolio_state, f, number_of_parameters, options = nil)
-            options = Utility::set_default_options(options, DEFAULT_OPTIONS)
+        def self.optimize_over_simplex(portfolio_state, f,
+                                          number_of_parameters, options = nil)
+            options = Utility::Options.set_default_options(options, DEFAULT_OPTIONS)
             
             minimizer = GSL::MultiMin::Minimizer.alloc("nmsimplex", number_of_parameters)
             
@@ -27,5 +28,14 @@ module Portfolio
                 end
             end while status == GSL::CONTINUE and iter < options[:max_iterations]
         end
+
+=begin
+        def self.optimize_over_pso(portfolio_state, number_of_parameters, options = nil, &blk)
+          pso = Math::Optimization::ParticleSwarmOptimization.optimize_over(
+                           population_size, feature_dimension, feature_limits,
+                           inertia, cognitive, social, options) {
+                                                      |*args| blk.call(*args) }
+        end
+=end
     end
 end

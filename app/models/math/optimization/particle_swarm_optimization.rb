@@ -92,12 +92,12 @@ module Math
                           :tolerance => 1e-16
                         }
       def self.optimize_over(population_size, feature_dimension, feature_limits, 
-                             inertia, cognitive, social, options)
+                             inertia, cognitive, social, options={})
 
         raise "Feature limit definition must be equal to feature size definition" unless feature_dimension == feature_limits.size
         raise "Block must be provided to optimize features" unless block_given?
 
-        options = Options.set_default_options(options, DEFAULT_OPTIONS)
+        options = Utility::Options.set_default_options(options, DEFAULT_OPTIONS)
 
         # initialize our population
         @population = Array.new(population_size)

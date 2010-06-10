@@ -25,7 +25,8 @@ module Portfolio
                     c = Company.first(:conditions => {:ticker => ticker})
                     if c.nil?
                         #if we can't find the company, create a new one (and download the data)
-                        c = Company.new(ticker) 
+                        c = Company.new(ticker)
+                        c.save!
                     end
                     companies[ticker] = c
                 
@@ -148,7 +149,7 @@ module Portfolio
             # the log differences
             return (daily_portfolio_value[1...@dates.size] - daily_portfolio_value[0...@dates.size-1])
         end
-        
+
     private
         def comptue_log_returns(dates)
             log_returns = GSL::Matrix(@tickers.size, @dates.size-1) 

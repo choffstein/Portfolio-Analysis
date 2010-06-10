@@ -38,7 +38,7 @@ module Math
         }
      
         # set up our default algorithm options
-        options = Options::set_default_options(options, DEFAULT_OPTIONS)
+        options = Utility::Options.set_default_options(options, DEFAULT_OPTIONS)
     
         n = ret[:x].length
     

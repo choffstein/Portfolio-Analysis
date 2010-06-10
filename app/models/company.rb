@@ -6,8 +6,10 @@ class Company < ActiveRecord::Base
   validates_presence_of :ticker, :name
   validates_uniqueness_of :ticker,  :case_sensitive => false
 
-  after_find :update_data
-    
+  def after_find
+    update_data
+  end
+
   def initialize(params = nil)
     super(params)
 
@@ -20,30 +22,36 @@ class Company < ActiveRecord::Base
   end
     
   def update_data
-    if self.data_points.size > 0
-      sorted_data_points = self.data_points.sort{ |dp| dp.date }
-      last_date = sorted_data_points[-1].date
-    end
-        
-    today = Time.now.getutc
-
-    data = download_data(last_date, today)
-    new_data_points = parse_data(data)
     
+    if self.data_points.size > 0
+      sorted_data_points = self.data_points.sort{ |dp1, dp2|
+            dp1.date <=> dp2.date
+      }
+      last_date = sorted_data_points[-1].date.time
+    end
+
+    # we look for 1 day ago because that is the market values available today
+    today = 1.day.ago
+
+    Rails.logger.info("#{last_date} vs #{today}")
     if last_date.nil?
+      # THIS IS A HACK FOR TESTING PURPOSES ONLY!  CHANGE BACK TO today
+      data = download_data(last_date, 2.days.ago)
+      new_data_points = parse_data(data)
       self.data_points = new_data_points
     elsif last_date < today
+
+      data = download_data(last_date, today)
+      new_data_points = parse_data(data).sort { |dp1, dp2| 
+            dp1.date <=> dp2.date 
+      }
       # check to see if the adjusted closes match of our last date,
       # and the first date we download
       if sorted_data_points[-1].adjusted_close != new_data_points[0].adjusted_close
         # they don't match -- there must have been a split or a dividend.
         # we need to reload all the data
-        Rails.logger.info("Looked like #{self.ticker} had a split/dividend ...
-                           reloading all the data")
-        self.data_points.each { |dp|
-          dp.destroy
-        }
-        self.data_points.clear
+        Rails.logger.info("Looked like #{self.ticker} had a split/dividend ... reloading all the data")
+        self.data_points.delete_all
 
         data = download_data(nil, today)
         new_data_points = parse_data(data)
@@ -57,7 +65,6 @@ class Company < ActiveRecord::Base
 
       self.save! #save ourself...
     end
-
   end
     
   def data_point_dates
@@ -98,7 +105,7 @@ class Company < ActiveRecord::Base
   def download_data(from=nil, to=nil)
     # inner helper function
     def array_for_date(d)
-      day = "#{d.day-1}"
+      day = "#{d.day}"
       month = ""
       if d.mon < 11
         month = "0#{d.mon-1}"
@@ -107,17 +114,16 @@ class Company < ActiveRecord::Base
       end
       year = "#{d.year}"
 
-      return [day, month, year]
+      return [month, day, year]
     end
 
-    from_array =    from.nil? ? [0,1,1900] : array_for_date(from)
-    to_array =      to.nil?   ? array_for_date(Time.now) : array_for_date(to)
+    from_array =    from.nil? ? ['','',''] : array_for_date(from)
+    to_array =      to.nil?   ? array_for_date(Time.now.getutc) : array_for_date(to)
 
     tries = MAX_DOWNLOAD_ATTEMPTS
 
     begin
       url = "/table.csv?s=#{ticker}&a=#{from_array[0]}&b=#{from_array[1]}&c=#{from_array[2]}&d=#{to_array[0]}&e=#{to_array[1]}&f=#{to_array[2]}&ignore=.csv"
-      
       data = Net::HTTP.get 'ichart.finance.yahoo.com', url
     rescue Timeout::Error
       if tries > 0

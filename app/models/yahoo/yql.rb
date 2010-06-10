@@ -1,5 +1,5 @@
 module Yahoo
-  class YQL
+  module YQL
     def self.get_company_name(ticker)
       url = "\"http://finance.yahoo.com/q/pr?s=#{ticker}\""
       query = "select * from html where url=#{url} and xpath='//td[@class=\"yfnc_modtitlew2\"]'"
