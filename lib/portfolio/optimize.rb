@@ -1,6 +1,3 @@
-require 'gsl'
-require 'utility/set_default_options'
-
 module Portfolio
     module Optimize
         # optimize (minimize) portfolio weights over a GSL::Function

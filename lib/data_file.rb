@@ -7,21 +7,22 @@ class DataFile
     @data = {}
 
     headers = []
-    type = []
+    types = []
 
     row_number = 0
     CSV.parse(upload[:datafile].read) { |row|
       if row_number == 0
 
         # Set up the headers for each column
-        headers = row
         row.each { |e|
-          @data[e.downcase] = []
+          eds = e.downcase.strip.underscore
+          headers << eds
+          @data[eds] = []
         }
 
       elsif row_number == 1
         # Set up each columns type
-        types = row.map { |e| e.downcase.to_sym }
+        types = row.map { |e| e.downcase.strip.to_sym }
       else
         # Convert the column entries
         0.upto(row.size-1) { |i|
@@ -33,8 +34,11 @@ class DataFile
   end
 
   def method_missing(method, *args, &block)
-    if args.size == 0 & block.nil?
-      return @data[method.to_s] #try to return the data
+    if args.size == 0 && block.nil?
+      method_string = method.to_s.underscore
+      return @data[method_string] unless @data[method_string].nil?
+      return @data[method_string.singularize] unless @data[method_string.singularize].nil?
+      raise
     else
       raise
     end

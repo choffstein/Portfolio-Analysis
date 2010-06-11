@@ -1,5 +1,3 @@
-require 'gsl'
-
 module Portfolio
     # This class encompasses the current state of the portfolio
     class State
