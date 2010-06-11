@@ -1,5 +1,5 @@
-require 'time'
 require 'csv'
+require 'time'
 
 class Company < ActiveRecord::Base
   has_many :data_points, :autosave => true
@@ -73,6 +73,19 @@ class Company < ActiveRecord::Base
     
   def adjusted_close
     Hash[*self.data_points.map { |dp| [dp.date, dp.adjusted_close] }]
+  end
+
+  def log_returns
+    # sort in ascending order
+    sorted_data_points = self.data_points.sort { |dp1, dp2| dp1.date <=> dp2.date }
+
+    log_returns = GSL::Vector.alloc(sorted_data_points.size-1)
+    1.upto(sorted_data_points.size-1) { |i|
+      log_returns[i-1] = Math.log(sorted_data_points[i].adjusted_close) -
+                       Math.log(sorted_data_points[i-1].adjusted_close)
+    }
+
+    return log_returns
   end
 
   # The next three methods will try to update the current model if the

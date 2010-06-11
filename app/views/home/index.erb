@@ -13,10 +13,15 @@
   <b>Number of Historic Prices: </b>: <%= @c.data_points.size %><br/><br/>
 
   <b>Historic Prices:</b><br/>
-  <% for data_point in @c.data_points.sort { |dp1, dp2| dp2.date <=> dp1.date } %>
-  Date: <%= data_point.date %>, Open: <%= data_point.open %>,
-  High: <%= data_point.high %>, Low: <%= data_point.low %>,
-  Close: <%= data_point.close %>, Volume: <%= data_point.volume %>,
-  Adjusted Close: <%= data_point.adjusted_close %><br/>
+  <% i = 0 %>
+  <% for data_point in @c.sorted_data_points { |dp1, dp2| dp2.date <=> dp1.date } %>
+    <% if @jumps[i] %>
+      <b>--JUMP!!--</b>
+    <% end %>
+    Date: <%= data_point.date %>, Open: <%= data_point.open %>,
+    High: <%= data_point.high %>, Low: <%= data_point.low %>,
+    Close: <%= data_point.close %>, Volume: <%= data_point.volume %>,
+    Adjusted Close: <%= data_point.adjusted_close %><br/>
+    <% i = i + 1 %>
   <% end  %>
 <% end %>

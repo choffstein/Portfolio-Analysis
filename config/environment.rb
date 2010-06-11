@@ -18,6 +18,12 @@ Rails::Initializer.run do |config|
     config.load_paths << full_path if File.directory?(full_path)
   end
 
+  Dir.entries("#{Rails.root}/lib").each do |file|
+    next if file.eql?('.') || file.eql?('..')
+    full_path = "#{Rails.root}/lib/#{file}"
+    config.load_paths << full_path if File.directory?(full_path)
+  end
+
   # Add additional load paths for your own custom dirs
   # config.load_paths += %W( #{RAILS_ROOT}/extras )
 
@@ -28,6 +34,7 @@ Rails::Initializer.run do |config|
   # config.gem "aws-s3", :lib => "aws/s3"
   # config.gem "clusterer"
   # config.gem "ai4r"
+  config.gem 'gsl'
 
   # Only load the plugins named here, in the order given (default is alphabetical).
   # :all can be used as a placeholder for all plugins not explicitly named

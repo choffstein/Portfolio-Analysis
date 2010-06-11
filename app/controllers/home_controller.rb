@@ -6,6 +6,8 @@ class HomeController < ApplicationController
         @c = Company.new({:ticker => params[:ticker]})
         @c.save!
       end
+
+      @jumps = Math::Statistics::Tests.jump_detection(@c.log_returns)
     else
       render :text => "Please provide a ticker"
     end
