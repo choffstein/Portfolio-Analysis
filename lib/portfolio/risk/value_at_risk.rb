@@ -15,9 +15,9 @@ module Portfolio
         z = Statistics2.pnormaldist(confidence_level)
         
         za = z + 
-             (1/6)*(z**2 - 1)*summary_stats[:skewness] +
-             (1/24)*(z**3 - 3*z)*summary_stats[:kurtosis] -
-             (1/36)*(2*z**3 - 5*z)*summary_stats[:skewness]**2
+             (1.0/6)*(z**2 - 1)*summary_stats[:skewness] +
+             (1.0/24)*(z**3 - 3.0*z)*summary_stats[:kurtosis] -
+             (1.0/36)*(2.0*(z**3) - 5.0*z)*(summary_stats[:skewness]**2)
 
         var = 1 - Math.exp(summary_stats[:mean] -
                                 za * Math.sqrt(summary_stats[:variance]))
