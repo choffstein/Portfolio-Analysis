@@ -3,7 +3,7 @@ module Portfolio
     module ReturnAnalysis
         
       ## These are proxies for composition break-down
-      SECTORS = {
+      SECTOR_PROXIES = {
         'Materials' => 'XLB',
         'Energy' => 'XLE',
         'Financials' => 'XLF',
@@ -17,7 +17,7 @@ module Portfolio
         'Real Estate' => 'VNQ'
       }
 
-      ASSETS = {
+      ASSET_PROXIES = {
         'U.S. Domestic Equities' => 'SPY',
         'European Equities' => 'VGK',
         'Emerging Markets' => 'VWO',
@@ -47,7 +47,7 @@ module Portfolio
         'International Real Estate' => 'RWX'
       }
 
-      STYLES = {
+      STYLE_PROXIES = {
         'Large Cap Value' => 'VTV',
         'Large Cap Blend' => 'VV',
         'Large Cap Growth' => 'VUG',
@@ -70,19 +70,21 @@ module Portfolio
         shared_factors_state = factors_state.select_dates(dates)
             
         #Exponentially weighted to drop off rapidly after `window` days
-        weights = GSL::Vector.alloc(num_days)
-        weights[num_days-1] = 1
+        weights = GSL::Vector.alloc(dates.size)
+        weights[dates.size-1] = 1
             
         #find the weight such that weights drop near 0 for a given window size
         window = dates.size
         w = Math.exp(Math.log(0.0001) / window)
-        (num_days-2).downto(0) { |i|
+        (dates.size-2).downto(0) { |i|
           weights[i] = w * weights[i+1]
         }
 
-        c, cov, chisq, status = GSL::MultiFit::wlinear(factor_returns, weights, portfolio_state.log_returns)
+        c, cov, chisq, status =
+               GSL::MultiFit::wlinear(shared_factors_state.log_returns, weights,
+                                             shared_portfolio_state.log_returns)
 
-
+        num_factors = factors.values.size
         lb = GSL::Vector.alloc(num_factors)
         lb.set_all(0.0)
 
@@ -98,25 +100,20 @@ module Portfolio
           -factor_returns.transpose * daily_fund_returns,
           a, 1.0, lb.col, ub.col, initial_guess.col)
 
-        s += "<b>Strict (Quadratic Programming) Decomposition</b>: <br/>"
-        s += x[:x].to_s + "<br/>" + x[:qp].to_s + "<br/><i>" + x[:exit_code].to_s + "</i><br/>"
-
-        s += "<br/><b>Return Concentration Decomposition: </b><br/>"
         #normalize the coefficients and take their proportion
         #abs_normalized_coeffs = (c / Math.sqrt(c * c.transpose)).abs
         #proportions = abs_normalized_coeffs / abs_normalized_coeffs.sum
         abs_normalized_coeffs = (c / Math.sqrt(c * c.transpose)).abs
         proportions = abs_normalized_coeffs / abs_normalized_coeffs.sum
 
+        return proportions
+      end
 
-        0.upto(num_factors-1) { |i|
-          s += "#{factors.keys[i]}: #{proportions[i] * 100}%<br/>"
-        }
-
+      def self.proportions_to_style(proportions)
         #Two extremes for style box allocation
         #   1) 100% in one box (variance = ((1 - 1/9)^2 + 8*(0 - 1/9)^2) / 9 ) -- we want a infinitely small point
         #   2) 1/9 in each box (variance = 0) -- we want a unit circle
-        styleBoxes = GSL::Matrix[[-1,  1],
+        style_boxes = GSL::Matrix[[-1,  1],
           [ 0,  1],
           [ 1,  1],
           [-1,  0],
@@ -126,43 +123,12 @@ module Portfolio
           [ 0, -1],
           [ 1, -1]];
 
-        max = 72.0 / 729.0
-        if proportions.size == styleBoxes.size1
-          loc = proportions * styleBoxes
-          s += "Style Box Location: #{loc}<br/>"
-          s += "Size: #{1 - proportions.var / max}<br/>"
-        end
+        max_variance = 72.0 / 729.0
+        location = proportions * style_boxes
+        size = 1 - proportions.var / max_variance
 
-        #calculate our epsilon values for our predictors
-        eps = weights.map { |v| Math.sqrt(v) } * (daily_fund_returns - factor_returns * c)
-
-        # find the weighted return variance (note, note the same as wvariance())
-        weighted_return_variance = 0
-        0.upto(num_factors-1) { |i|
-          weighted_return_variance += (c[i]**2) * cov[i,i]
-          0.upto(num_factors-1) { |j|
-            weighted_return_variance += 2*c[i]*c[j]*cov[i,j] unless i == j
-          }
-        }
-        weighted_return_variance += eps.var
-
-        s += "<br/><br/><b>Risk Weight:</b><br/>"
-        risks = GSL::Vector.alloc(num_factors)
-        0.upto(num_factors-1) { |i|
-          risk = (c[i]**2)*cov[i,i]
-          0.upto(num_factors-1) { |j|
-            risk += c[i]*c[j]*cov[i,j] unless i == j
-          }
-          risks[i] = risk * 100 / weighted_return_variance
-        }
-        0.upto(num_factors-1) { |i|
-          s += "#{factors.keys[i]}: #{risks[i]}%<br/>"
-        }
-        s += "Idiosyncratic Risk: #{(100 - risks.sum)}%<br/>"
-
-        return s
+        return {:location => location, :size => size}
       end
-
 
       def self.pca(portfolio_state)
         #compute the eigen-vals and eigen-vects

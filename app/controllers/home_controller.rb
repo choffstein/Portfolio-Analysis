@@ -7,9 +7,9 @@ class HomeController < ApplicationController
         @c.save!
       end
 
-      @jumps = Math::Statistics::Tests.jump_detection(@c.log_returns)
+      @jumps = Statistics::Tests.jump_detection(@c.log_returns)
     else
-      render :text => "Please provide a ticker"
+      render :text => "Please enter a ticker"
     end
   end
 end

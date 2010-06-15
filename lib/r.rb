@@ -1,18 +1,28 @@
-require 'rsruby'
-
-class R
+module R
+  # not so thread-safe, having only one instance -- but the web-interface
+  # is just a single user interface anyway for the application
+  RInstance = RSRuby.instance
+  
   def self.eval(&block)
-    return RSRuby.instance.instance_eval &block
+    return RInstance.instance_eval &block
   end
 
 	def self.method_missing(method_sym, *arguments, &block)
 		method_string = method_sym.to_s
 		begin
-			return RSRuby.instance.send(method_string.split('r_')[1].to_sym, *arguments)
+			return RInstance.send(method_sym, *arguments)
     rescue
 			super
 		end
 	end
 
-  # should implement a respond_to? here
+  # this will be slooooowwwww
+  def self.respond_to?(method_sym)
+		begin
+			RInstance.send method_sym
+      return true
+    rescue
+      super
+		end
+	end
 end

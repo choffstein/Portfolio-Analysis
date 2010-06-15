@@ -1,7 +1,6 @@
 require 'csv'
 
 class DataFile
-
   def initialize(upload)
     @file_name  = upload[:datafile].original_filename
     @data = {}
