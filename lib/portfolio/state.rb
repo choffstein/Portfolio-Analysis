@@ -20,10 +20,10 @@ module Portfolio
         companies = {}
         keys = []
         @tickers.each { |ticker|
-          c = Company.first(:conditions => {:ticker => ticker})
+          c = Company.first(:conditions => {:ticker => ticker.downcase})
           if c.nil?
             #if we can't find the company, create a new one (and download the data)
-            c = Company.new(ticker)
+            c = Company.new({:ticker => ticker.downcase})
             c.save!
           end
           companies[ticker] = c

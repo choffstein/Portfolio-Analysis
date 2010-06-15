@@ -157,21 +157,24 @@ class Company < ActiveRecord::Base
   def parse_data(data)
     dps = []
     first = true
-    CSV.parse(data) { |row|
-
-      dp = DataPoint.new( {:date => Utility::ParseDates::str_to_date(row[0]),
-          :open => row[1].to_f,
-          :high => row[2].to_f,
-          :low  => row[3].to_f,
-          :close => row[4].to_f,
-          :volume => row[5].to_i,
-          :adjusted_close => row[6].to_f,
-          :company_id => self.id # need this for validation in DataPoint
-        }) unless first
-      dps << dp unless first
-      first = false
-    }
-
+    begin
+      CSV.parse(data) { |row|
+        
+        dp = DataPoint.new( {:date => Utility::ParseDates::str_to_date(row[0]),
+            :open => row[1].to_f,
+            :high => row[2].to_f,
+            :low  => row[3].to_f,
+            :close => row[4].to_f,
+            :volume => row[5].to_i,
+            :adjusted_close => row[6].to_f,
+            :company_id => self.id # need this for validation in DataPoint
+          }) unless first
+        dps << dp unless first
+        first = false
+      }
+    rescue
+      raise "Unable to load data for #{@ticker}"
+    end
     return dps
   end
 end
