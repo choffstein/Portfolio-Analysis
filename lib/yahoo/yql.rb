@@ -3,8 +3,9 @@ module Yahoo
     def self.get_company_name(ticker)
       url = "\"http://finance.yahoo.com/q/pr?s=#{ticker}\""
       query = "select * from html where url=#{url} and xpath='//td[@class=\"yfnc_modtitlew2\"]'"
-      results = yql_query(query)
+      company_name = "N/A"
       begin
+        results = yql_query(query)
         company_name = clean_result(results['query']['results']['td'][0]['strong'])
         company_name.gsub!(',', '') #get rid of extraneous commas
       rescue
@@ -15,6 +16,7 @@ module Yahoo
     def self.get_company_profile(ticker)
       url = "\"http://finance.yahoo.com/q/pr?s=#{ticker}\""
       query = "select * from html where url=#{url} and xpath='//table[@id=\"yfncsumtab\"][1]//table[4]'"
+      company_profile = "N/A"
       begin
         results = yql_query(query)
         company_profile = clean_result(results['query']['results']['table'][0]['tr'][0]['td']['p'])
@@ -26,6 +28,7 @@ module Yahoo
     def self.get_company_sector(ticker)
       url = "\"http://finance.yahoo.com/q/pr?s=#{ticker}\""
       query = "select * from html where url=#{url} and xpath='//table[@class=\"yfnc_datamodoutline1\"][1]/tr/td/table/tr'"
+      sector = "N/A"
       begin
         results = yql_query(query)
         sector = clean_result(results['query']['results']['tr'][1]['td'][1]['a']['content'])
@@ -55,7 +58,9 @@ module Yahoo
           } )
 
         json = JSON.parse( response.body )
-      rescue
+      rescue JSON::NestingError
+        raise #if we get a parsing error, we need to raise it
+      rescue Timeout::Error  #if we get a timeout error,
         if tries < MAX_QUERIES
           tries = tries + 1
           sleep(tries)
