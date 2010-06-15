@@ -14,9 +14,11 @@
 
   <b>Historic Prices:</b><br/>
   <% i = 0 %>
-  <% for data_point in @c.sorted_data_points { |dp1, dp2| dp2.date <=> dp1.date } %>
-    <% if @jumps[i] %>
+  <% k = 0 %>
+  <% for data_point in @c.data_points.sort { |dp1, dp2| dp1.date <=> dp2.date } %>
+    <% if @jumps[k] == i %>
       <b>--JUMP!!--</b>
+      <% k = k + 1 %>
     <% end %>
     Date: <%= data_point.date %>, Open: <%= data_point.open %>,
     High: <%= data_point.high %>, Low: <%= data_point.low %>,

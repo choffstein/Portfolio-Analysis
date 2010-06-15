@@ -12,7 +12,7 @@ class Company < ActiveRecord::Base
 
   def initialize(params = nil)
     super(params)
-
+    
     self.name = Yahoo::YQL.get_company_name(self.ticker) if self.name.nil?
     self.sector = Yahoo::YQL.get_company_sector(self.ticker) if self.sector.nil?
     self.profile = Yahoo::YQL.get_company_profile(self.ticker) if self.profile.nil?
@@ -22,7 +22,11 @@ class Company < ActiveRecord::Base
   end
     
   def update_data
-    
+    # try to re-download our info if we didn't get it last time...
+    self.name = Yahoo::YQL.get_company_name(self.ticker) if self.name.nil? || self.name == "N/A"
+    self.sector = Yahoo::YQL.get_company_sector(self.ticker) if self.sector.nil? || self.sector == "N/A"
+    self.profile = Yahoo::YQL.get_company_profile(self.ticker) if self.profile.nil? || self.profile == "N/A"
+
     if self.data_points.size > 0
       sorted_data_points = self.data_points.sort{ |dp1, dp2|
             dp1.date <=> dp2.date
@@ -33,12 +37,11 @@ class Company < ActiveRecord::Base
     # we look for 1 day ago because that is the market values available today
     today = 1.day.ago
 
-    Rails.logger.info("#{last_date} vs #{today}")
     if last_date.nil?
-      # THIS IS A HACK FOR TESTING PURPOSES ONLY!  CHANGE BACK TO today
-      data = download_data(last_date, 2.days.ago)
+      data = download_data(last_date, today)
       new_data_points = parse_data(data)
       self.data_points = new_data_points
+
     elsif last_date < today
 
       data = download_data(last_date, today)
