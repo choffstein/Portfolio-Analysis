@@ -45,7 +45,7 @@ class Company < ActiveRecord::Base
     elsif last_date < today
 
       data = download_data(last_date, today)
-      new_data_points = parse_data(data).sort { |dp1, dp2| 
+      new_data_points = parse_data(data).sort { |dp1, dp2|
             dp1.date <=> dp2.date 
       }
       # check to see if the adjusted closes match of our last date,
@@ -68,14 +68,26 @@ class Company < ActiveRecord::Base
 
       self.save! #save ourself...
     end
+
+    @data_point_hash = self.data_points.each_with_object({}) { |dp, hsh|
+          hsh[dp.date] = dp
+    }
+  end
+
+  def values_at(dates)
+    return dates.each_with_object(Hash.new) { |date, hsh|
+      hsh[date] = @data_point_hash[date]
+    }
   end
     
   def data_point_dates
-    self.data_points.map { |dp| dp.date }
+    return self.data_points.map { |dp| dp.date }
   end
     
-  def adjusted_close
-    Hash[*self.data_points.map { |dp| [dp.date, dp.adjusted_close] }]
+  def adjusted_closes
+    ac = {}
+    self.data_points.each { |dp| ac[dp.date] = dp.adjusted_close }
+    return ac
   end
 
   def log_returns
@@ -159,8 +171,8 @@ class Company < ActiveRecord::Base
     first = true
     begin
       CSV.parse(data) { |row|
-        
-        dp = DataPoint.new( {:date => Utility::ParseDates::str_to_date(row[0]),
+        dp = DataPoint.new( {
+            :date => Utility::ParseDates::str_to_date(row[0]),
             :open => row[1].to_f,
             :high => row[2].to_f,
             :low  => row[3].to_f,

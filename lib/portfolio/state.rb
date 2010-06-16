@@ -11,22 +11,23 @@ module Portfolio
         
     def initialize(params = {})
       @number_of_shares = params[:number_of_shares]
-      @tickers = params[:tickers]
+      @tickers = params[:tickers].map { |ticker| ticker.downcase}
             
       # check if the time series already exists
       if params[:time_series].nil?
         # find the shared dates between all tickers in the portfolio
         first = true
-        companies = {}
+        @companies = {}
         keys = []
+        Status.update("Loading company data")
         @tickers.each { |ticker|
-          c = Company.first(:conditions => {:ticker => ticker.downcase})
+          c = Company.first(:conditions => {:ticker => ticker})
           if c.nil?
             #if we can't find the company, create a new one (and download the data)
-            c = Company.new({:ticker => ticker.downcase})
+            c = Company.new({:ticker => ticker})
             c.save!
           end
-          companies[ticker] = c
+          @companies[ticker] = c
                 
           if first
             keys = c.data_point_dates
@@ -35,13 +36,16 @@ module Portfolio
             keys = keys & c.data_point_dates
           end
         }
-            
+
         @dates = keys.sort
             
         # compute the time series
         @time_series = {}
-        0.upto(holdings.size-1) { |i|
-          @time_series[ticker] = companies[ticker].adjusted_close_series.select{ |k,v| @dates.include?(k) }
+        @tickers.each { |ticker|
+          selected_values = @companies[ticker].values_at(@dates)
+          @time_series[ticker] = selected_values.each_with_object({}) { |(k,v), hsh|
+            hsh[k] = v.adjusted_close
+          }
         }
       else
         # the time series already exists, so just copy it
@@ -50,8 +54,11 @@ module Portfolio
       end
                
       # compute or copy the log returns, covariance matrix, and correlation matrix
+      Status.update("Constructing log returns")
       @log_returns        = params[:log_returns].nil? ? compute_log_returns(@dates) : params[:log_returns]
+      Status.update("Constructing covariance matrix")
       @covariance_matrix  = params[:covariance_matrix].nil? ? compute_covariance_matrix(@log_returns) : params[:covariance_matrix]
+      Status.update("Constructing correlation matrix")
       @correlation_matrix = params[:correlation_matrix].nil? ? compute_correlation_matrix(@covariance_matrix) : params[:correlation_matrix]
     end
         
@@ -65,8 +72,8 @@ module Portfolio
       raise "offset + window must be less than total number of dates" unless offset+window < @dates.size
             
       covariance_matrix = GSL::Matrix(@tickers.size, @tickers.size)
-      0.upto(@holdings.size-1) { |i|
-        i.upto(@holdings.size-1) { |j|
+      0.upto(@tickers.size-1) { |i|
+        i.upto(@tickers.size-1) { |j|
           cov = GSL::Stats::covariance(@log_returns.row(i).get(offset...offset+window),
             @log_returns.row(j).get(offset...offset+window))
           covariance_matrix[i,j] = cov
@@ -90,7 +97,7 @@ module Portfolio
         :log_returns => lr,
         :covariance_matrix => cov,
         :correlation_matrix => corr,
-        :time_series => @time_series.values.map { |holding| holding.select { |k,v| dates.include?(k) } }
+        :time_series => @time_series.values.map { |holding| holding.values_at(dates) }
       }
             
       return State.new(params)
@@ -103,7 +110,7 @@ module Portfolio
       raise "window size must be greater than zero" unless window > 0
       raise "offset + window must be less than total number of dates" unless offset+window < @dates.size
             
-      lr = @log_returns.submatrix(0, offset, @holdings.size-1, window)
+      lr = @log_returns.submatrix(0, offset, @tickers.size-1, window)
       cov = compute_covariance_matrix(lr)
       corr = compute_correlation_matrix(corr)
       dates = @dates[offset...offset+window]
@@ -115,7 +122,7 @@ module Portfolio
         :log_returns => lr,
         :covariance_matrix => cov,
         :correlation_matrix => corr,
-        :time_series => @time_series.map { |holding| holding.values.select { |k,v| dates.include?(k) } }
+        :time_series => @time_series.map { |holding| holding.values_at(dates) }
       }
                    
       return State.new(params)
@@ -149,11 +156,12 @@ module Portfolio
     end
 
     private
-    def comptue_log_returns(dates)
-      log_returns = GSL::Matrix(@tickers.size, @dates.size-1)
-      0.upto(@holdings.size-1) { |i|
+    def compute_log_returns(dates)
+      log_returns = GSL::Matrix.alloc(@tickers.size, dates.size-1)
+      0.upto(@tickers.size-1) { |i|
+        ticker = @tickers[i]
         1.upto(dates.size-1) { |d|
-          log_returns[i,d] = Math.log(@time_series[ticker][dates[d]]) -
+          log_returns[i,d-1] = Math.log(@time_series[ticker][dates[d]]) -
             Math.log(@time_series[ticker][dates[d-1]])
         }
       }
@@ -162,12 +170,12 @@ module Portfolio
         
     # Assumes @log_returns is filled
     def compute_covariance_matrix(log_returns)
-      covariance_matrix = GSL::Matrix(@tickers.size, @tickers.size)
-      0.upto(@holdings.size-1) { |i|
-        i.upto(@holdings.size-1) { |j|
+      covariance_matrix = GSL::Matrix.alloc(@tickers.size, @tickers.size)
+      0.upto(@tickers.size-1) { |i|
+        i.upto(@tickers.size-1) { |j|
           cov = GSL::Stats::covariance(log_returns.row(i), log_returns.row(j))
           covariance_matrix[i,j] = cov
-          covaraince_matrix[j,i] = cov #symmetric matrix
+          covariance_matrix[j,i] = cov #symmetric matrix
         }
       }
       return covariance_matrix
@@ -175,9 +183,9 @@ module Portfolio
         
     # Assumes @covariance_matrix is filled
     def compute_correlation_matrix(covariance_matrix)
-      correlation_matrix = GSL::Matrix(@tickers.size, @tickers.size)
-      0.upto(@holdings.size-1) { |i|
-        i.upto(@holdings.size-1) { |j|
+      correlation_matrix = GSL::Matrix.alloc(@tickers.size, @tickers.size)
+      0.upto(@tickers.size-1) { |i|
+        i.upto(@tickers.size-1) { |j|
           corr = covariance_matrix[i,j] / Math.sqrt(covariance_matrix[i,i] * covariance_matrix[j,j])
           correlation_matrix[i,j] = corr
           correlation_matrix[j,i] = corr #symmetric matrix

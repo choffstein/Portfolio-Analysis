@@ -13,7 +13,13 @@ class HomeController < ApplicationController
     end
   end
 
+  def risk_analysis
+    state = Portfolio::State.new({:tickers => %w{BAC GE JPM}, :number_of_shares => [20, 35, 15]})
+    composite_risk = Portfolio::Risk::ValueAtRisk.composite_risk(state)
+  
+    render :text => composite_risk
+  end
+
   def state_test
-    Portfolio::State.new({:tickers => %w{BAC GE JPM}, :number_of_shares => [20, 35, 15]})
   end
 end

@@ -7,4 +7,11 @@ class ApplicationController < ActionController::Base
 
   # Scrub sensitive parameters from your log
   # filter_parameter_logging :password
+
+  def render_status
+    if request.xhr?
+      status = Status.render
+      render :text => status[1]
+    end
+  end
 end

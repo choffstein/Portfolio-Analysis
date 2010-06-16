@@ -30,8 +30,7 @@ module Portfolio
         def self.optimize_over_pso(portfolio_state, number_of_parameters, options = nil, &blk)
           pso = Math::Optimization::ParticleSwarmOptimization.optimize_over(
                            population_size, feature_dimension, feature_limits,
-                           inertia, cognitive, social, options) {
-                                                      |*args| blk.call(*args) }
+                           inertia, cognitive, social, options, &blk)
         end
 =end
     end

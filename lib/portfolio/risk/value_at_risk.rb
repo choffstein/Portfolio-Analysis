@@ -1,6 +1,3 @@
-require 'statistics2'
-require 'rubystats'
-
 module Portfolio
   module Risk
     module ValueAtRisk
@@ -10,19 +7,20 @@ module Portfolio
       # value at risk statistic for skew and kurtosis factors
       def self.cornish_fisher(log_returns, confidence_level=0.95)
         summary_stats = Statistics::Bootstrap.block_bootstrap(log_returns, 1000)
-
+        
         # one sided tail
         z = Statistics2.pnormaldist(confidence_level)
-        
+
+        # see http://www.riskglossary.com/link/cornish_fisher.htm
         za = z + 
-             (1.0/6)*(z**2 - 1)*summary_stats[:skewness] +
-             (1.0/24)*(z**3 - 3.0*z)*summary_stats[:kurtosis] -
-             (1.0/36)*(2.0*(z**3) - 5.0*z)*(summary_stats[:skewness]**2)
+             (1.0/6.0)*(z**2 - 1.0)*summary_stats[:skewness] +
+             (1.0/24.0)*(z**3 - 3.0*z)*(summary_stats[:kurtosis]) -
+             (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(summary_stats[:skewness]**2)
 
         var = 1 - Math.exp(summary_stats[:mean] -
                                 za * Math.sqrt(summary_stats[:variance]))
 
-        normal_distribution = Rubystats::NormalDistribution.new(0,1)
+        normal_distribution = Rubystats::NormalDistribution.new(0.0, 1.0)
         
         cvar = 1 - Math.exp(summary_stats[:mean] -
                                 Math.sqrt(summary_stats[:variance]) *
@@ -40,7 +38,7 @@ module Portfolio
         
         vars = GSL::Vector.alloc(n)
         0.upto(n-1) { |i|
-          vars[i] = cornish_fisher(returns.row(i))
+          vars[i] =  cornish_fisher(returns.row(i))[:var]
         }
 
         weights = portfolio_state.current_weights
@@ -59,7 +57,7 @@ module Portfolio
         # multiply each risk by the portfolios exposure to it
         weighted_risks = risks * weights
 
-        weighted_risks / sum(weighted_risks)
+        weighted_risks / weighted_risks.abs.sum
       end
     end
   end
