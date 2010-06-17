@@ -43,16 +43,17 @@ module Statistics
     public
     # reference http://www.smartfolio.com/theory/details/appendices/a/
     # TODO: Should this be weighted randoms?
-    def self.block_bootstrap(returns, target_length, block_size = 50, n = 1000)
+    def self.block_bootstrap(returns, target_length, block_size = 20, n = 1000)
       raise "Target length must be even multiple of block size" unless (target_length % block_size == 0)
 
       returns_as_array = returns.to_a
       total_blocks = returns_as_array.size - block_size
-      # ideally, we want to pick from the last 5 years, which on a daily basis
-      # is a decay weight of 0.00001 = x**500
-      # =>                  log(0.0001)/500 = log(x)
-      # =>                  e^(log(0.0001)/500)) = x
-      weight_factor = Math.exp(Math.log(0.0001)/500.0)
+      # ideally, we want to pick from the last 5 years (1000 days),
+      # which on a daily basis is a decay weight x solving
+      #                              0.00001 = x**1000
+      # =>                  log(0.0001)/1000 = log(x)
+      # =>             e^(log(0.0001)/1000)) = x
+      weight_factor = Math.exp(Math.log(0.0001)/1000.0)
       weights = (0..total_blocks).map { |i| weight_factor**i }.reverse
 
       blocks = []
@@ -72,12 +73,23 @@ module Statistics
         }
       }
 
-      v = series.to_v #turn our matrix into a long vector of returns
+      means = GSL::Vector.alloc(n)
+      variances = GSL::Vector.alloc(n)
+      skews = GSL::Vector.alloc(n)
+      kurtoses = GSL::Vector.alloc(n)
+
+      0.upto(n-1) { |i|
+        row = series.row(i)
+        means[i] = row.mean
+        variances[i] = row.variance
+        skews[i] = row.skew
+        kurtoses[i] = row.kurtosis
+      }
       return {
-        :mean => v.mean,
-        :variance => v.variance,
-        :skewness => v.skew,
-        :kurtosis => v.kurtosis,
+        :mean => means.mean,
+        :variance => variances.mean,
+        :skewness => skews.mean,
+        :kurtosis => kurtoses.mean,
         :series => series
       }
     end
