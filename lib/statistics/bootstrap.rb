@@ -48,12 +48,12 @@ module Statistics
 
       returns_as_array = returns.to_a
       total_blocks = returns_as_array.size - block_size
-      # ideally, we want to pick from the last 5 years (1000 days),
+      # ideally, we want to pick from the last 10 years (10*250 days),
       # which on a daily basis is a decay weight x solving
-      #                              0.00001 = x**1000
-      # =>                  log(0.0001)/1000 = log(x)
-      # =>             e^(log(0.0001)/1000)) = x
-      weight_factor = Math.exp(Math.log(0.0001)/1000.0)
+      #                              0.00001 = x**2500
+      # =>                  log(0.0001)/2500 = log(x)
+      # =>             e^(log(0.0001)/2500)) = x
+      weight_factor = Math.exp(Math.log(0.0001)/2500.0)
       weights = (0..total_blocks).map { |i| weight_factor**i }.reverse
 
       blocks = []
@@ -81,9 +81,10 @@ module Statistics
       0.upto(n-1) { |i|
         row = series.row(i)
         means[i] = row.mean
-        variances[i] = row.variance
-        skews[i] = row.skew
-        kurtoses[i] = row.kurtosis
+        variances[i] = row.variance_m(means[i])
+        #sd = Math.sqrt(variances[i])
+        skews[i] = row.skew #FIX: skew(means[i], sd)
+        kurtoses[i] = row.kurtosis #FIX: kurtosis(means[i], sd)
       }
       return {
         :mean => means.mean,

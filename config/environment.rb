@@ -9,6 +9,9 @@ ENV['R_HOME'] = '/Library/Frameworks/R.framework/Resources'
 require File.join(File.dirname(__FILE__), 'boot')
 
 Rails::Initializer.run do |config|
+  # turn of SQL logging
+  config.log_level = :info
+  
   # Settings in config/environments/* take precedence over those specified here.
   # Application configuration should go into files in config/initializers
   # -- all .rb files in that directory are automatically loaded.

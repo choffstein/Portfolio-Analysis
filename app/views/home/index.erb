@@ -20,10 +20,7 @@
       <b>--JUMP!!--</b>
       <% k = k + 1 %>
     <% end %>
-    Date: <%= data_point.date %>, Open: <%= data_point.open %>,
-    High: <%= data_point.high %>, Low: <%= data_point.low %>,
-    Close: <%= data_point.close %>, Volume: <%= data_point.volume %>,
-    Adjusted Close: <%= data_point.adjusted_close %><br/>
+    <%= data_point.to_s %><br/>
     <% i = i + 1 %>
   <% end  %>
 <% end %>

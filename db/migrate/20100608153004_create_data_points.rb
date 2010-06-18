@@ -3,7 +3,7 @@ class CreateDataPoints < ActiveRecord::Migration
     create_table :data_points do |table|
       table.belongs_to :company
 
-      table.datetime  :date
+      table.integer   :date
       table.float     :open
       table.float     :high
       table.float     :low

@@ -103,7 +103,7 @@ module Portfolio
         #normalize the coefficients and take their proportion
         #abs_normalized_coeffs = (c / Math.sqrt(c * c.transpose)).abs
         #proportions = abs_normalized_coeffs / abs_normalized_coeffs.sum
-        abs_normalized_coeffs = (c / Math.sqrt(c * c.transpose)).abs
+        abs_normalized_coeffs = c.normalize.abs
         proportions = abs_normalized_coeffs / abs_normalized_coeffs.sum
 
         return proportions

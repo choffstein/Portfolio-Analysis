@@ -8,19 +8,12 @@ module Utility
   module ParseDates
     include ThirdBase
 
-    def self.parsedate(str)
-      d = Date.parse(str)
-      return [d.year, d.month, d.day]
-    end
-
-    def self.is_valid?(str)
-      (!str.nil? && str != "-" && str != "#N/A" && str != " " && str != "#DIV/0!")
-    end
-
     # Month / Day / Year format
     def self.str_to_date(str)
       begin
-        return Time.utc(*parsedate(str))
+        year, month, day = str.split('-').map { |e| e.to_i }
+        #FIX: Use 12PM here to get around the 4 hour time difference hack
+        return Time.utc(year, month, day, 12)
       rescue ArgumentError, TypeError
         raise "Invalid date: #{str}"
       end

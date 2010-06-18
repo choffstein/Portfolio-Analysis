@@ -23,7 +23,7 @@ ActiveRecord::Schema.define(:version => 20100608153709) do
 
   create_table "data_points", :force => true do |t|
     t.integer  "company_id"
-    t.datetime "date"
+    t.integer  "date"
     t.float    "open"
     t.float    "high"
     t.float    "low"

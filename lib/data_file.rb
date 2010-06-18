@@ -2,6 +2,7 @@ require 'csv'
 
 class DataFile
   def initialize(upload)
+    Status.info("Parsing data file")
     @file_name  = upload[:datafile].original_filename
     @data = {}
 
