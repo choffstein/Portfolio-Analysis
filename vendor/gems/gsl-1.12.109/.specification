@@ -1,0 +1,244 @@
+--- !ruby/object:Gem::Specification 
+name: gsl
+version: !ruby/object:Gem::Version 
+  hash: 253
+  prerelease: false
+  segments: 
+  - 1
+  - 12
+  - 109
+  version: 1.12.109
+platform: ruby
+authors: 
+- Yoshiki Tsunesada
+- David MacMahon
+autorequire: 
+bindir: bin
+cert_chain: []
+
+date: 2009-12-08 00:00:00 -05:00
+default_executable: 
+dependencies: 
+- !ruby/object:Gem::Dependency 
+  name: narray
+  prerelease: false
+  requirement: &id001 !ruby/object:Gem::Requirement 
+    none: false
+    requirements: 
+    - - ">="
+      - !ruby/object:Gem::Version 
+        hash: 25
+        segments: 
+        - 0
+        - 5
+        - 9
+        version: 0.5.9
+  type: :runtime
+  version_requirements: *id001
+description: RubyGSL is a Ruby interface to the GNU Scientific Library, for numerical computing with Ruby
+email: y-tsunesada@mm.em-net.ne.jp
+executables: []
+
+extensions: 
+- ext/extconf.rb
+extra_rdoc_files: []
+
+files: 
+- README.rdoc
+- VERSION
+- Rakefile
+- ext/alf.c
+- ext/array.c
+- ext/array_complex.c
+- ext/blas.c
+- ext/blas1.c
+- ext/blas2.c
+- ext/blas3.c
+- ext/block.c
+- ext/block_source.c
+- ext/bspline.c
+- ext/bundle.c
+- ext/cdf.c
+- ext/cheb.c
+- ext/combination.c
+- ext/common.c
+- ext/complex.c
+- ext/const.c
+- ext/const_additional.c
+- ext/cqp.c
+- ext/deriv.c
+- ext/dht.c
+- ext/diff.c
+- ext/dirac.c
+- ext/eigen.c
+- ext/error.c
+- ext/extconf.rb
+- ext/fcmp.c
+- ext/fft.c
+- ext/fit.c
+- ext/fresnel.c
+- ext/function.c
+- ext/geometry.c
+- ext/graph.c
+- ext/gsl.c
+- ext/gsl_narray.c
+- ext/histogram.c
+- ext/histogram2d.c
+- ext/histogram3d.c
+- ext/histogram3d_source.c
+- ext/histogram_find.c
+- ext/histogram_oper.c
+- ext/ieee.c
+- ext/integration.c
+- ext/interp.c
+- ext/jacobi.c
+- ext/linalg.c
+- ext/linalg_complex.c
+- ext/MANIFEST
+- ext/math.c
+- ext/matrix.c
+- ext/matrix_complex.c
+- ext/matrix_double.c
+- ext/matrix_int.c
+- ext/matrix_source.c
+- ext/min.c
+- ext/monte.c
+- ext/multifit.c
+- ext/multimin.c
+- ext/multimin_fsdf.c
+- ext/multiroots.c
+- ext/ndlinear.c
+- ext/nmf.c
+- ext/nmf_wrap.c
+- ext/ntuple.c
+- ext/odeiv.c
+- ext/ool.c
+- ext/oper_complex_source.c
+- ext/permutation.c
+- ext/poly.c
+- ext/poly2.c
+- ext/poly_source.c
+- ext/qrng.c
+- ext/randist.c
+- ext/rational.c
+- ext/rng.c
+- ext/root.c
+- ext/sf.c
+- ext/sf_airy.c
+- ext/sf_bessel.c
+- ext/sf_clausen.c
+- ext/sf_coulomb.c
+- ext/sf_coupling.c
+- ext/sf_dawson.c
+- ext/sf_debye.c
+- ext/sf_dilog.c
+- ext/sf_elementary.c
+- ext/sf_ellint.c
+- ext/sf_elljac.c
+- ext/sf_erfc.c
+- ext/sf_exp.c
+- ext/sf_expint.c
+- ext/sf_fermi_dirac.c
+- ext/sf_gamma.c
+- ext/sf_gegenbauer.c
+- ext/sf_hyperg.c
+- ext/sf_laguerre.c
+- ext/sf_lambert.c
+- ext/sf_legendre.c
+- ext/sf_log.c
+- ext/sf_mathieu.c
+- ext/sf_power.c
+- ext/sf_psi.c
+- ext/sf_synchrotron.c
+- ext/sf_transport.c
+- ext/sf_trigonometric.c
+- ext/sf_zeta.c
+- ext/signal.c
+- ext/siman.c
+- ext/sort.c
+- ext/spline.c
+- ext/stats.c
+- ext/sum.c
+- ext/tamu_anova.c
+- ext/tensor.c
+- ext/tensor_source.c
+- ext/vector.c
+- ext/vector_complex.c
+- ext/vector_double.c
+- ext/vector_int.c
+- ext/vector_source.c
+- ext/wavelet.c
+- lib/gsl/gnuplot.rb
+- lib/gsl/oper.rb
+- lib/ool/conmin.rb
+- lib/ool.rb
+- include/rb_gsl.h
+- include/rb_gsl_array.h
+- include/rb_gsl_cheb.h
+- include/rb_gsl_common.h
+- include/rb_gsl_complex.h
+- include/rb_gsl_const.h
+- include/rb_gsl_dirac.h
+- include/rb_gsl_eigen.h
+- include/rb_gsl_fft.h
+- include/rb_gsl_fit.h
+- include/rb_gsl_function.h
+- include/rb_gsl_graph.h
+- include/rb_gsl_histogram.h
+- include/rb_gsl_histogram3d.h
+- include/rb_gsl_integration.h
+- include/rb_gsl_interp.h
+- include/rb_gsl_linalg.h
+- include/rb_gsl_math.h
+- include/rb_gsl_odeiv.h
+- include/rb_gsl_poly.h
+- include/rb_gsl_rational.h
+- include/rb_gsl_rng.h
+- include/rb_gsl_root.h
+- include/rb_gsl_sf.h
+- include/rb_gsl_statistics.h
+- include/rb_gsl_tensor.h
+- include/rb_gsl_with_narray.h
+- include/templates_off.h
+- include/templates_on.h
+has_rdoc: true
+homepage: http://rb-gsl.rubyforge.org/
+licenses: []
+
+post_install_message: 
+rdoc_options: []
+
+require_paths: 
+- lib
+- lib/gsl
+- lib/ool
+- ext
+required_ruby_version: !ruby/object:Gem::Requirement 
+  none: false
+  requirements: 
+  - - ">="
+    - !ruby/object:Gem::Version 
+      hash: 53
+      segments: 
+      - 1
+      - 8
+      - 1
+      version: 1.8.1
+required_rubygems_version: !ruby/object:Gem::Requirement 
+  none: false
+  requirements: 
+  - - ">="
+    - !ruby/object:Gem::Version 
+      hash: 3
+      segments: 
+      - 0
+      version: "0"
+requirements: 
+- GSL (http://www.gnu.org/software/gsl/)
+rubyforge_project: rb-gsl
+rubygems_version: 1.3.7
+signing_key: 
+specification_version: 3
+summary: Ruby interface to GSL
+test_files: []
+
