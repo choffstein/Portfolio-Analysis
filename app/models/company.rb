@@ -57,7 +57,7 @@ class Company < ActiveRecord::Base
 
       data = download_data(last_date, today)
       new_data_points = parse_data(data).sort { |dp1, dp2|
-            dp1.date <=> dp2.date 
+            dp1[:date] <=> dp2[:date]
       }
 
       Rails.logger.info(sorted_data_points[-1])
@@ -65,7 +65,7 @@ class Company < ActiveRecord::Base
 
       # check to see if the adjusted closes match of our last date,
       # and the first date we download
-      if sorted_data_points[-1].adjusted_close != new_data_points[0].adjusted_close
+      if sorted_data_points[-1].adjusted_close != new_data_points[0][:adjusted_close]
         # they don't match -- there must have been a split or a dividend.
         # we need to reload all the data
         Status.info("Looks like #{self.ticker} had a split/dividend ... reloading all the data")
@@ -73,11 +73,11 @@ class Company < ActiveRecord::Base
 
         data = download_data(nil, today)
         new_data_points = parse_data(data)
-        self.data_points = new_data_points
+        self.data_points = new_data_points.map { |p| DataPoint.new(p) }
       else
         # we don't need to reload the data, so just load in the fresh stuff
         new_data_points[1...new_data_points.size].each { |ndp|
-          self.data_points << ndp
+          self.data_points << DataPoint.new(ndp)
         }
       end
 
@@ -190,7 +190,7 @@ class Company < ActiveRecord::Base
     Status.info("Parsing time-series data for #{self.ticker}")
     begin
       CSV.parse(data) { |row|
-        dp = DataPoint.new( {
+        dp = {
             :date => Utility::ParseDates::str_to_date(row[0]).to_i,
             :open => row[1].to_f,
             :high => row[2].to_f,
@@ -199,7 +199,7 @@ class Company < ActiveRecord::Base
             :volume => row[5].to_i,
             :adjusted_close => row[6].to_f,
             :company_id => self.id # need this for validation in DataPoint
-          }) unless first
+          } unless first
         dps << dp unless first
         first = false
       }
