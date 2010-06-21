@@ -2,6 +2,8 @@ module R
   # not so thread-safe, having only one instance -- but the web-interface
   # is just a single user interface anyway for the application
   RInstance = RSRuby.instance
+  RInstance.library("BLCOP")
+  RInstance.library("fPortfolio")
   
   def self.eval(&block)
     return RInstance.instance_eval &block

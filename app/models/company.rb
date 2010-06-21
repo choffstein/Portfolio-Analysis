@@ -51,7 +51,7 @@ class Company < ActiveRecord::Base
     if last_date.nil?
       data = download_data(last_date, today)
       new_data_points = parse_data(data)
-      self.data_points = new_data_points
+      self.data_points = new_data_points.map { |p| DataPoint.new(p) }
 
     elsif last_date < today.to_i
 

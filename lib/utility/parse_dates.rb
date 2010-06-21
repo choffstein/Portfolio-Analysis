@@ -2,8 +2,6 @@
 # Copyright:: Copyright (c) 2010
 # License::   Distributes under the same terms as Ruby
 
-require 'third_base'
-
 module Utility
   module ParseDates
     include ThirdBase

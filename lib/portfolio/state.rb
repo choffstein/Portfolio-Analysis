@@ -57,7 +57,6 @@ module Portfolio
       end
                
       # compute or copy the log returns, covariance matrix, and correlation matrix
-      Status.update("Constructing log returns")
       if !params[:log_returns].nil?
         @log_returns = params[:log_returns]
       else
@@ -129,23 +128,55 @@ module Portfolio
         
     #compute the portfolio log return vector
     def to_log_return_vector
-      Status.info("Computing log returns")
+      Status.info("Creating portfolio log returns")
+      #shouldn't really need this...
+      compute_log_returns unless !@log_returns.nil?
+      compute_weights unless !@weights.nil?
+      
       begin
-        daily_portfolio_value = GSL::Vector.alloc(@dates.size)
-        0.upto(@dates.size-1) { |d|
-          daily_portfolio_value[d] = 0
+        # using @log_returns,
+        @portfolio_log_returns = GSL::Vector.alloc(@dates.size)
+        @portfolio_log_returns.set_all(0.0)
+        0.upto(@log_returns.size2 - 1) { |d|
 
+          # add each share's value to the overall portfolio value
           0.upto(@tickers.size-1) { |i|
-            daily_portfolio_value[d] += @number_of_shares[i] * @time_series[@tickers[i]][@dates[d]]
+           @portfolio_log_returns[d] += @weights[i] * @log_returns[i,d]
           }
         }
-        daily_portfolio_value = Math.log(daily_portfolio_value)
-
-        # the log differences
-        @log_returns = (daily_portfolio_value[1...@dates.size] - daily_portfolio_value[0...@dates.size-1])
-      end unless !@log_returns.nil?
+      end unless !@portfolio_log_returns.nil?
       
-      return @log_returns
+      return @portfolio_log_returns
+    end
+
+    # perform a monte-carlo 
+    def monte_carlo(periods_forward = 100, n = 1000, block_size = 5)
+      log_returns = self.to_log_return_vector
+      results = Statistics::Bootstrap::block_bootstrap(log_returns, periods_forward, block_size, n)
+      series = results[:series]
+
+      current_portfolio_value = compute_current_portfolio_value
+
+      # given our current portfolio value and a series of log returns,
+      # we need to come up with a series of portfolio values
+
+      0.upto(series.size1-1) { |i|
+        row = series.row(i)
+        row.map! { |e| Math.exp(e) } #convert to returns
+        series.set_row(i, current_portfolio_value * row.cumprod)
+      }
+
+      # now, for each column, we need a mean and variance
+      means = GSL::Vector.alloc(series.size2)
+      stddevs = GSL::Vector.alloc(series.size2)
+
+      0.upto(series.size2-1) { |i|
+        column = series.column(i)
+        means[i] = column.mean
+        stddevs[i] = Math.sqrt(column.variance)
+      }
+
+      return {:means => means, :standard_deviations => stddevs}
     end
 
     private
@@ -160,6 +191,14 @@ module Portfolio
 
         @weights = (@weights / @weights.abs.sum)
       end unless !@weights.nil?
+    end
+
+    def compute_current_portfolio_value
+      pval = 0
+      0.upto(@tickers.size-1) { |i|
+        pval = pval + @number_of_shares[i] * @time_series[@tickers[i]][@dates[-1]]
+      }
+      return pval
     end
     
     def compute_log_returns

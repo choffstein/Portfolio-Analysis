@@ -5,6 +5,10 @@
 
 ENV['R_HOME'] = '/Library/Frameworks/R.framework/Resources'
 
+#FIX: Make the gem work instead of requiring gsl
+require 'gsl'
+require 'google_chart'
+
 # Bootstrap the Rails environment, frameworks, and default configuration
 require File.join(File.dirname(__FILE__), 'boot')
 
@@ -37,10 +41,10 @@ Rails::Initializer.run do |config|
   # config.gem "hpricot", :version => '0.6', :source => "http://code.whytheluckystiff.net"
   # config.gem "sqlite3-ruby", :lib => "sqlite3"
   # config.gem "aws-s3", :lib => "aws/s3"
-  config.gem 'gsl'
   config.gem 'rubystats'
   config.gem 'statistics2'
-  
+  config.gem 'third_base'
+ 
   # Only load the plugins named here, in the order given (default is alphabetical).
   # :all can be used as a placeholder for all plugins not explicitly named
   # config.plugins = [ :exception_notification, :ssl_requirement, :all ]

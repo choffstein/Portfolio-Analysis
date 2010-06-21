@@ -42,7 +42,8 @@ module Statistics
 
     public
     # reference http://www.smartfolio.com/theory/details/appendices/a/
-    # TODO: Should this be weighted randoms?
+    # Ideally here, we would do a weighted random system where the weight
+    # choice becomes smoother the further we get away from the present
     def self.block_bootstrap(returns, target_length, block_size = 20, n = 1000)
       raise "Target length must be even multiple of block size" unless (target_length % block_size == 0)
 
@@ -60,15 +61,16 @@ module Statistics
       0.upto(total_blocks-1) { |i|
         blocks << returns_as_array[i...(i+block_size)]
       }
-      num_blocks = blocks.size
 
+      #TODO: weighted blocks should be recomputed every time a block is
+      #      placed
       weighted_blocks = WeightedArray.new(blocks, weights)
       series = GSL::Matrix.alloc(n, target_length)
       0.upto(n-1) { |i|
-        0.upto(target_length / block_size) { |j|
+        0.upto((target_length / block_size) - 1) { |j|
           random_block = weighted_blocks.random_element
           (j*block_size).upto((j+1)*block_size-1) { |k|
-            series[i,j] = random_block[k-j*block_size]
+            series[i,k] = random_block[k-j*block_size]
           }
         }
       }
