@@ -1,4 +1,5 @@
 require 'csv'
+require 'date'
 require 'time'
 
 class Company < ActiveRecord::Base
@@ -23,69 +24,75 @@ class Company < ActiveRecord::Base
   end
     
   def update_data
-    # try to re-download our info if we didn't get it last time...
-    Status.info("Computing company info for #{self.ticker}")
-    self.name = Yahoo::YQL.get_company_name(self.ticker) if self.name.nil? || self.name == "N/A"
-    self.sector = Yahoo::YQL.get_company_sector(self.ticker) if self.sector.nil? || self.sector == "N/A"
-    self.profile = Yahoo::YQL.get_company_profile(self.ticker) if self.profile.nil? || self.profile == "N/A"
+    if self.last_update.nil? || self.last_update < Date.today
 
-    if self.data_points.size > 0
-      sorted_data_points = DataPoint.find(:all, :order => "date ASC",
-                                        :conditions => {:company_id => self.id})
-      last_date = sorted_data_points[-1].date
-    end
+      # try to re-download our info if we didn't get it last time...
+      Status.info("Computing company info for #{self.ticker}")
+      self.name = Yahoo::YQL.get_company_name(self.ticker) if self.name.nil? || self.name == "N/A"
+      self.sector = Yahoo::YQL.get_company_sector(self.ticker) if self.sector.nil? || self.sector == "N/A"
+      self.profile = Yahoo::YQL.get_company_profile(self.ticker) if self.profile.nil? || self.profile == "N/A"
 
-    # Get the last week-day (for market prices)
-    # Monday (0) needs Friday (3 days ago)
-    # Sunday (7) needs Friday (2 days ago)
-    # All else need the previous day (1 day ago)
-    today = Date.today.wday
-    if today == 0
-      today = 3.days.ago
-    elsif today == 7
-      today = 2.days.ago
-    else
-      today = 1.day.ago
-    end
-
-    if last_date.nil?
-      data = download_data(last_date, today)
-      new_data_points = parse_data(data)
-      self.data_points = new_data_points.map { |p| DataPoint.new(p) }
-
-    elsif last_date < today.to_i
-
-      data = download_data(last_date, today)
-      new_data_points = parse_data(data).sort { |dp1, dp2|
-            dp1[:date] <=> dp2[:date]
-      }
-
-      Rails.logger.info(sorted_data_points[-1])
-      Rails.logger.info(new_data_points[0])
-
-      # check to see if the adjusted closes match of our last date,
-      # and the first date we download
-      if sorted_data_points[-1].adjusted_close != new_data_points[0][:adjusted_close]
-        # they don't match -- there must have been a split or a dividend.
-        # we need to reload all the data
-        Status.info("Looks like #{self.ticker} had a split/dividend ... reloading all the data")
-        self.data_points.delete_all
-
-        data = download_data(nil, today)
-        new_data_points = parse_data(data)
-        self.data_points = new_data_points.map { |p| DataPoint.new(p) }
-      else
-        # we don't need to reload the data, so just load in the fresh stuff
-        new_data_points[1...new_data_points.size].each { |ndp|
-          self.data_points << DataPoint.new(ndp)
-        }
+      if self.data_points.size > 0
+        sorted_data_points = DataPoint.find(:all, :order => "date ASC",
+                                          :conditions => {:company_id => self.id})
+        last_date = sorted_data_points[-1].date
       end
 
-      self.save! #save ourself...
+      # Get the last week-day (for market prices)
+      # Monday (0) needs Friday (3 days ago)
+      # Sunday (7) needs Friday (2 days ago)
+      # All else need the previous day (1 day ago)
+      today = Date.today.wday
+      if today == 0
+        today = 3.days.ago
+      elsif today == 7
+        today = 2.days.ago
+      else
+        today = 1.day.ago
+      end
+
+      if last_date.nil?
+        data = download_data(last_date, today)
+        new_data_points = parse_data(data)
+        self.data_points = new_data_points.map { |p| DataPoint.new(p) }
+
+      elsif last_date < today.to_i
+
+        data = download_data(last_date, today)
+        new_data_points = parse_data(data).sort { |dp1, dp2|
+              dp1[:date] <=> dp2[:date]
+        }
+
+        #Rails.logger.info(sorted_data_points[-1])
+        #Rails.logger.info(new_data_points[0])
+
+        # check to see if the adjusted closes match of our last date,
+        # and the first date we download
+        if sorted_data_points[-1].adjusted_close != new_data_points[0][:adjusted_close]
+          # they don't match -- there must have been a split or a dividend.
+          # we need to reload all the data
+          Status.info("Looks like #{self.ticker} had a split/dividend ... reloading all the data")
+          self.data_points.delete_all
+
+          data = download_data(nil, today)
+          new_data_points = parse_data(data)
+          self.data_points = new_data_points.map { |p| DataPoint.new(p) }
+        else
+          # we don't need to reload the data, so just load in the fresh stuff
+          new_data_points[1...new_data_points.size].each { |ndp|
+            self.data_points << DataPoint.new(ndp)
+          }
+        end
+      end
+
+      generate_image
+
+      self.last_update = Date.today
+      self.save!
     end
 
     @data_point_hash = self.data_points.each_with_object({}) { |dp, hsh|
-          hsh[dp.date] = dp
+      hsh[dp.date] = dp
     }
   end
 
@@ -144,6 +151,52 @@ class Company < ActiveRecord::Base
 
   private
 
+  def generate_image
+    if self.image_generation_time.nil? || 
+          self.image_generation_time < Date.today ||
+          !File.exist?("public/images/tickers/#{self.ticker}.png")
+
+      Status.info("Generated graph of adjusted closes for #{self.ticker}")
+      adjusted_close = adjusted_closes.sort[(-[adjusted_closes.size,1000].min)..-1] #take last 5 years
+
+      lc = GoogleChart::LineChart.new
+      lc.width = 600
+      lc.height = 300
+      lc.title = "Adjusted Close"
+
+      dates = adjusted_close.map { |d,v| d }
+      values = adjusted_close.map { |d,v| v}
+
+      lc.data "Adjusted Close", values, 'FF6600'
+
+      lc.encoding = :extended
+      lc.show_legend = true
+
+      lc.axis :left, :range => [(values.min*0.9).floor, (values.max*1.1).ceil],
+        :color => '000000', :font_size => 10, :alignment => :center
+
+      # FIX: Make this global?  Local?  Class method of array?
+      def every(a, n)
+        a.select {|x| a.index(x) % n == 0}
+      end
+      
+
+      labels = every(dates.map{ |t| Time.at(t).strftime("%m/%d/%Y")}, 100)
+      labels << Time.at(dates[-1]).strftime("%m/%d/%Y")
+
+      lc.axis :bottom, :range => [1, dates.size],
+        :color => '000000', :font_size => 8, :alignment => :center,
+        :labels => labels
+
+      extras = {
+        :chg => "10,10,1,5"
+      }
+      lc.write_to("public/images/tickers/#{self.ticker}", extras)
+
+      self.image_generation_time = Date.today
+    end
+  end
+
   MAX_DOWNLOAD_ATTEMPTS = 10
   
   def download_data(from=nil, to=nil)
@@ -197,8 +250,7 @@ class Company < ActiveRecord::Base
             :low  => row[3].to_f,
             :close => row[4].to_f,
             :volume => row[5].to_i,
-            :adjusted_close => row[6].to_f,
-            :company_id => self.id # need this for validation in DataPoint
+            :adjusted_close => row[6].to_f
           } unless first
         dps << dp unless first
         first = false

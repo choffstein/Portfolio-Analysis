@@ -14,4 +14,21 @@ class ApplicationController < ActionController::Base
       render :text => status[1]
     end
   end
+
+  def random_color
+    s = rand(16777215).to_s(16)
+    (6 - s.length).times {
+      s = "0" + s
+    }
+    return s
+  end
+
+  #gray is 0-1
+  def greyscale_to_rgb(grey)
+    as_hex = (grey*256).floor.to_s(16)
+    if as_hex.length < 2
+      as_hex = "0" + as_hex
+    end
+    return (as_hex + as_hex + as_hex)
+  end
 end

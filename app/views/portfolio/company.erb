@@ -1,0 +1,7 @@
+<h1><%= @company.name %> (<%= @company.ticker.upcase %>)</h1>
+<h3>Sector</h3>
+<%= @company.sector %>
+<h3>About</h3>
+<%= @company.profile %>
+<br/><br/>
+<%= image_tag("tickers/#{@company.ticker}.png") %>
