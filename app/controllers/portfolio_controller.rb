@@ -59,7 +59,7 @@ class PortfolioController < ApplicationController
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
-            lc.title = "200 Day Projection (Monte Carlo Simulation with n = 10000)"
+            lc.title = "200 Day Projection (Monte Carlo Simulation with n = 2500)"
 
             lc.data "Mean Return", means, '000000', "5,0,0"
             lc.data "2 Pos. Std. Devs", two_std_above, '4AC948', "3,6,3"
@@ -118,7 +118,7 @@ class PortfolioController < ApplicationController
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
-            lc.title = "4 Quarter Income Projection (Monte Carlo Simulation with n = 10000)"
+            lc.title = "4 Quarter Income Projection (Monte Carlo Simulation with n = 2500)"
 
             lc.data "Mean Return", means, '000000', "5,0,0"
             lc.data "2 Pos. Std. Devs", two_std_above, '4AC948', "3,6,3"
@@ -226,7 +226,7 @@ class PortfolioController < ApplicationController
           r_squared = return_values[:r2]
 
           sa = GoogleChart::StackedArea.new
-          sa.title = "Return Decomposition"
+          sa.title = "Return Decomposition by U.S. Sector"
           sa.width = 600
           sa.height = 300
           sa.show_legend = true
@@ -250,7 +250,6 @@ class PortfolioController < ApplicationController
           :font_size => 16, :range => [1,x_axis_length]
 
           lc = GoogleChart::LineChart.new
-          lc.title = "Return Decomposition"
           lc.width = 600
           lc.height = 150
           lc.title = "R-Squared"
@@ -361,7 +360,7 @@ class PortfolioController < ApplicationController
           r_squared = return_values[:r2]
 
           sa = GoogleChart::StackedArea.new
-          sa.title = "Return Decomposition"
+          sa.title = "Return Decomposition by Asset Class"
           sa.width = 600
           sa.height = 300
           sa.show_legend = true
@@ -385,7 +384,6 @@ class PortfolioController < ApplicationController
           :font_size => 16, :range => [1,x_axis_length]
 
           lc = GoogleChart::LineChart.new
-          lc.title = "Return Decomposition"
           lc.width = 600
           lc.height = 150
           lc.title = "R-Squared"
@@ -402,12 +400,119 @@ class PortfolioController < ApplicationController
           :color => '000000', :font_size => 16, :alignment => :center
 
           #FIX: This seems like a rather ugly way to do this
-          sa.write_to("public/images/portfolio/sector_return_decomposition", {:chdlp => 'b'})
-          lc.write_to("public/images/portfolio/sector_r-squared", {:chdlp => 'b'})
+          sa.write_to("public/images/portfolio/asset_return_decomposition", {:chdlp => 'b'})
+          lc.write_to("public/images/portfolio/asset_r-squared", {:chdlp => 'b'})
 
           #send_data(sa.fetch_image, :type => 'image/png',
           #          :file_name => 'Return Composition', :disposition => 'inline')
-          render :inline => "<%= image_tag(\"portfolio/sector_return_decomposition.png\") %><br/><%= image_tag(\"portfolio/sector_r-squared.png\") %>"
+          render :inline => "<%= image_tag(\"portfolio/asset_return_decomposition.png\") %><br/><%= image_tag(\"portfolio/asset_r-squared.png\") %>"
+        }
+      end
+    end
+
+    def risk_to_return
+      respond_to do |wants|
+        wants.js {
+
+          tickers = session[:portfolio].tickers.clone
+          tickers << 'SPY'
+
+          shares = session[:portfolio].shares.clone
+          shares << 1
+
+          state = Portfolio::State.new({:tickers => tickers,
+                                        :number_of_shares => shares})
+          offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+          sliced_state = state.slice(offset) # ~5 years
+          risks_and_returns = sliced_state.risk_to_return
+          
+          colors = []
+          risks_and_returns.size.times { |i|
+            colors << random_color
+          }
+
+          risks_and_returns.map! { |e| [e[0]*100, e[1]*100] }
+
+          Rails.logger.info(risks_and_returns)
+
+          tickers << "Portfolio"
+          # Scatter Plot
+
+          @chart = GoogleVisualr::ScatterChart.new
+          @chart.add_column('number', 'Risk')
+
+          risks_and_returns.size.times { |i|
+            @chart.add_column('number', "#{tickers[i]}")
+          }
+
+          @chart.add_rows(risks_and_returns.size)
+          
+          risks_and_returns.size.times { |i|
+            risk, ret = risks_and_returns[i]
+
+            @chart.set_value( i, 0, risk  )
+            1.upto(risks_and_returns.size) { |j|
+              @chart.set_value( i, j, nil ) if i+1 != j
+              @chart.set_value( i, j, ret ) if i+1 == j
+            }
+          }
+
+          options = { :width => 600,
+                      :height => 600,
+                      :titleX => 'Risk',
+                      :titleY => 'Return',
+                      :legend => 'bottom`',
+                      :pointSize => 5,
+                      :title => 'Annualized Risk vs Return'
+                    }
+          options.each_pair do | key, value |
+            @chart.send "#{key}=", value
+          end
+
+          render :inline => "<%= @chart.render('risk_vs_return_results') %>"
+
+=begin
+          sc = GoogleChart::ScatterPlot.new
+          sc.width = 400
+          sc.height = 400
+          sc.title = "Annualized Risk vs. Return"
+          sc.data "", risks_and_returns, colors
+          sc.encoding = :extended
+
+
+          #sc.data "Style Points", points, colors
+          returns = risks_and_returns.map { |e| e[1] }
+          risks = risks_and_returns.map { |e| e[0] }
+
+          min_return = returns.flatten.min
+          max_return = returns.flatten.max
+
+          min_risk = risks.flatten.min
+          max_risk = risks.flatten.max
+
+          sc.max_x = max_risk
+          sc.max_y = max_return
+
+          sc.min_x = min_risk
+          sc.min_y = min_return
+
+          sc.point_sizes (Array.new(risks_and_returns.size, 1))
+
+          sc.axis(:bottom, :range => 0..max_risk)
+          sc.axis(:left, :range => min_return..max_return)
+
+          #FIX: This seems like a rather ugly way to do this
+          extras = {
+            :chg => "10,10,1,5",
+            :chdl => tickers[0...tickers.size-1].join('|') + "|S&P 500|Portfolio",
+            :chdlp => 'b'
+          }
+          sc.write_to("public/images/portfolio/risk_versus_return", extras)
+
+          #send_data(sa.fetch_image, :type => 'image/png',
+          #          :file_name => 'Return Composition', :disposition => 'inline')
+          render :inline => "<%= image_tag(\"portfolio/risk_versus_return.png\") %>"
+=end
         }
       end
     end

@@ -50,8 +50,8 @@ module Statistics
     #                              0.00001 = x**2500
     # =>                  log(0.0001)/2500 = log(x)
     # =>             e^(log(0.0001)/2500)) = x
-    def self.block_bootstrap(returns, target_length, block_size = 10,
-                                      n = 10000, weight_factor = 0.998401279)
+    def self.block_bootstrap(returns, target_length, block_size = 20,
+                                      n = 2500, weight_factor = 0.998401279)
       raise "Target length must be even multiple of block size" unless (target_length % block_size == 0)
 
       returns_as_array = returns.to_a

@@ -180,7 +180,42 @@ module Portfolio
       return v
     end
 
+    def risk_to_return(periods = 1000, n = 2500, block_size = 20, weight_factor = 0.998401279)
+      means_variances = []
+      @log_returns.size1.times { |i|
+        Status.info("Performing Risk vs Return simulation on #{@tickers[i]}")
+        lr = @log_returns.row(i)
+        summary_stats = Statistics::Bootstrap::block_bootstrap(lr, periods,
+          block_size, n, weight_factor)
+
+        series = summary_stats[:series]
+        returns = GSL::Vector.alloc(series.size1)
+        series.size1.times { |j|
+          v = series.row(j).map { |e| Math.exp(e) }.cumprod
+          returns[j] = (v[-1] ** (1.0/(periods / 250.0))) - 1 # annualize
+        }
+
+        means_variances << [Math.sqrt(returns.variance), returns.mean]
+      }
+
+      Status.info("Performing Risk vs Return simulation on Portfolio")
+      # compute the portfolio mean / variance
+      summary_stats = Statistics::Bootstrap::block_bootstrap(self.to_log_returns,
+                              periods, block_size, n, weight_factor)
+      series = summary_stats[:series]
+      returns = GSL::Vector.alloc(series.size1)
+      series.size1.times { |j|
+        v = series.row(j).map { |e| Math.exp(e) }.cumprod
+        returns[j] = (v[-1] ** (1.0/(periods / 250.0))) - 1 # annualize
+      }
+
+      means_variances << [Math.sqrt(returns.variance), returns.mean]
+
+      return means_variances
+    end
+
     def income_monte_carlo(periods_forward = 4, n = 10000, block_size = 1)
+      Status.info("Performing portfolio income monte-carlo simulation")
       historic_income = self.to_income_stream
       
       # transform the income stream into log returns
@@ -193,18 +228,19 @@ module Portfolio
       
       # drastically over-weight recent income growth versus historic
       return monte_carlo(log_returns, current_income,
-                          periods_forward, n, block_size, 0.85)
+                          periods_forward, n, block_size, 0.975)
     end
 
-    def return_monte_carlo(periods_forward = 200, n = 10000, block_size = 10)
+    def return_monte_carlo(periods_forward = 1000, n = 2500, block_size = 20)
+      Status.info("Performing return monte-carlo simulation on portfolio")
       return monte_carlo(self.to_log_returns, compute_current_portfolio_value,
                           periods_forward, n, block_size)
     end
 
     private
 
-    def monte_carlo(log_returns, initial_value, periods_forward = 200,
-                      n = 10000, block_size = 5, weight_factor = 0.998401279)
+    def monte_carlo(log_returns, initial_value, periods_forward = 1000,
+                      n = 2500, block_size = 20, weight_factor = 0.998401279)
       results = Statistics::Bootstrap::block_bootstrap(log_returns, 
                                 periods_forward, block_size, n, weight_factor)
       series = results[:series]
@@ -249,7 +285,7 @@ module Portfolio
       Status.info("Computing portfolio weights")
       begin
         @weights = GSL::Vector.alloc(@tickers.size)
-        0.upto(@tickers.size-1) { |i|
+        @tickers.size.times { |i|
           @weights[i] = @number_of_shares[i] * @time_series[@tickers[i]][@dates[-1]]
         }
 

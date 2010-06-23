@@ -41,8 +41,8 @@ module Portfolio
         n = returns.size1
         
         vars = GSL::Vector.alloc(n)
-        Status.info('Computing Cornish-Fisher VaRs')
         0.upto(n-1) { |i|
+          Status.info("Computing Cornish-Fisher VaRs (#{i+1}/#{n})")
           value_at_risk = cornish_fisher(returns.row(i))
           #Rails.logger.info(value_at_risk)
           vars[i] =  value_at_risk[:var]

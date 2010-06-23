@@ -53,6 +53,15 @@
       </div></td>
   </tr>
   <tr>
+    <td>Risk vs Return Breakdown</td>
+    <td align="center"><div id="risk_vs_return_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :risk_to_return},
+        :loading => "start_xhr('risk_vs_return_results')",
+        :complete => "stop_xhr('risk_vs_return_results')",
+        :update => 'risk_vs_return_results' %></td>
+  </tr>
+  <tr>
     <td>Portfolio Risk Decomposition by Holding</td>
     <td align="center"><div id="risk_results" style="visibility:hidden">
       </div>

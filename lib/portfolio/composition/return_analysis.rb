@@ -23,8 +23,8 @@ module Portfolio
 
         'International (Ex-US) Treasuries' => 'BWX',
         'Corporate Bonds' => 'JNK',
-        'U.S. Short Term Treasuries' => 'BIL',
-        'U.S. Long Term Treasuries' => 'TLT',
+        'U.S. Short Term Treasuries (1-3)' => 'SHY',
+        'U.S. Long Term Treasuries (20+)' => 'TLT',
 
         'Commodities' => 'DBC',
         
