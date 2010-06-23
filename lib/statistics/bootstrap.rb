@@ -44,17 +44,19 @@ module Statistics
     # reference http://www.smartfolio.com/theory/details/appendices/a/
     # Ideally here, we would do a weighted random system where the weight
     # choice becomes smoother the further we get away from the present
-    def self.block_bootstrap(returns, target_length, block_size = 20, n = 1000)
+    #
+    # ideally, we want to pick from the last 10 years (10*250 days),
+    # which on a daily basis is a decay weight x solving
+    #                              0.00001 = x**2500
+    # =>                  log(0.0001)/2500 = log(x)
+    # =>             e^(log(0.0001)/2500)) = x
+    def self.block_bootstrap(returns, target_length, block_size = 10,
+                                      n = 10000, weight_factor = 0.998401279)
       raise "Target length must be even multiple of block size" unless (target_length % block_size == 0)
 
       returns_as_array = returns.to_a
       total_blocks = returns_as_array.size - block_size
-      # ideally, we want to pick from the last 10 years (10*250 days),
-      # which on a daily basis is a decay weight x solving
-      #                              0.00001 = x**2500
-      # =>                  log(0.0001)/2500 = log(x)
-      # =>             e^(log(0.0001)/2500)) = x
-      weight_factor = Math.exp(Math.log(0.0001)/2500.0)
+      
       weights = (0..total_blocks).map { |i| weight_factor**i }.reverse
 
       blocks = []

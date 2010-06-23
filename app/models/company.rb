@@ -2,6 +2,9 @@ require 'csv'
 require 'date'
 require 'time'
 
+require 'net/http'
+require 'uri'
+
 class Company < ActiveRecord::Base
   has_many :data_points, :autosave => true
   validates_presence_of :ticker, :name
@@ -54,7 +57,12 @@ class Company < ActiveRecord::Base
       if last_date.nil?
         data = download_data(last_date, today)
         new_data_points = parse_data(data)
-        self.data_points = new_data_points.map { |p| DataPoint.new(p) }
+
+        #use crewait to perform bulk insert
+        Status.info("Loading data-points into database")
+        Crewait.start_waiting
+        new_data_points.each { |p| DataPoint.crewait(p) }
+        Crewait.go!
 
       elsif last_date < today.to_i
 
@@ -76,18 +84,29 @@ class Company < ActiveRecord::Base
 
           data = download_data(nil, today)
           new_data_points = parse_data(data)
-          self.data_points = new_data_points.map { |p| DataPoint.new(p) }
+          
+          # use ar-extensions to do bulk import
+          Status.info("Loading data-points into database")
+          Crewait.start_waiting
+          new_data_points.each { |p| DataPoint.crewait(p) }
+          Crewait.go!
         else
           # we don't need to reload the data, so just load in the fresh stuff
-          new_data_points[1...new_data_points.size].each { |ndp|
-            self.data_points << DataPoint.new(ndp)
+          Status.info("Loading data-points into database")
+          Crewait.start_waiting
+          new_data_points[1...new_data_points.size].map { |ndp|
+            DataPoint.crewait(ndp)
           }
+          Crewait.go!
         end
       end
 
-      generate_image
+      #reload our data-points
+      self.data_points = DataPoint.all(:conditions => {:company_id => self.id})
 
+      generate_image
       self.last_update = Date.today
+      
       self.save!
     end
 
@@ -147,6 +166,86 @@ class Company < ActiveRecord::Base
       self.sector = Yahoo::YQL.get_company_sector(ticker)
     end
     return self.sector
+  end
+
+  def dividends
+    quarters = { 1 => "jan",
+                 2 => "apr",
+                 3 => "jul",
+                 4 => "oct" }
+
+    Status.info("Downloading dividend information for #{self.ticker}")
+    data = Net::HTTP.get URI.parse("http://ichart.finance.yahoo.com/table.csv?s=#{self.ticker}&g=v&ignore=.csv")
+
+    Status.info("Parsing dividend information for #{self.ticker}")
+    dividends = {}
+
+    i = 0
+    first = true
+    current_quarter = nil
+    CSV.parse(data) { |row|
+      if !first
+        date = Utility::ParseDates::str_to_date(row[0])
+        dividend = row[1].to_f
+
+        1.upto(4) { |i|
+          # check if we need to roll-over
+          year = i == 4 ? date.year + 1 : date.year
+          next_quarter = i == 4 ? 1 : i+1
+
+          # is our current date less than the beginning of the next quarter /
+          # this quarter end?
+          quarter_begin = Time.utc(date.year, quarters[i], 1, 12, 0, 0)
+          quarter_end = Time.utc(year, quarters[next_quarter], 1, 12, 0, 0)
+          if quarter_begin < date && date <= quarter_end
+            current_quarter = i
+          end
+        }
+
+        key = "#{date.year}Q#{current_quarter}"
+        
+        if dividends[key].nil?
+          dividends[key] =  dividend
+        else
+          #they put two dividends in the same quarter
+          # is it a special dividend or should we just bump a quarter
+
+          # it should be an unusually high dividend INCREASE to count as a
+          # special dividend
+          if (Math.log(dividend) - 
+                    Math.log(dividends[key])).abs > 1.609 #~500% hike
+
+            #we'll take the one that was closest to the previous
+            # remember, we are 'walking backwards' (because of how we read the
+            # data, so use the 'last' quarter (which is technically the future)
+            if current_quarter == 4
+              previous_key = "#{date.year+1}Q1"
+            else
+              previous_key = "#{date.year}Q#{current_quarter+1}"
+            end
+
+            # wierd corner case -- this was our second dividend
+            # just take the smaller one
+            if dividends[previous_key].nil?
+              dividends[key] = [dividends[key], dividend].min
+            else
+              distance_one = (Math.log(dividends[previous_key])-dividends[key]).abs
+              distance_two = (Math.log(dividends[previous_key])-dividend).abs
+
+              if distance_two < distance_one
+                dividends[key] = dividend
+              end
+            end
+          else
+            # these are probably monthly dividends -- add it to the quarterly
+            dividends[key] +=  dividend
+          end
+        end
+      end
+      first = false
+    }
+
+    return dividends
   end
 
   private
@@ -222,8 +321,7 @@ class Company < ActiveRecord::Base
 
     Status.info("Downloading data for #{self.ticker}")
     begin
-      url = "/table.csv?s=#{ticker}&a=#{from_array[0]}&b=#{from_array[1]}&c=#{from_array[2]}&d=#{to_array[0]}&e=#{to_array[1]}&f=#{to_array[2]}&ignore=.csv"
-      data = Net::HTTP.get 'ichart.finance.yahoo.com', url
+      data = Net::HTTP.get URI.parse("http://ichart.finance.yahoo.com/table.csv?s=#{ticker}&a=#{from_array[0]}&b=#{from_array[1]}&c=#{from_array[2]}&d=#{to_array[0]}&e=#{to_array[1]}&f=#{to_array[2]}&ignore=.csv")
     rescue Timeout::Error
       if tries > 0
         tries = tries - 1
@@ -243,18 +341,22 @@ class Company < ActiveRecord::Base
     Status.info("Parsing time-series data for #{self.ticker}")
     begin
       CSV.parse(data) { |row|
-        dp = {
-            :date => Utility::ParseDates::str_to_date(row[0]).to_i,
-            :open => row[1].to_f,
-            :high => row[2].to_f,
-            :low  => row[3].to_f,
-            :close => row[4].to_f,
-            :volume => row[5].to_i,
-            :adjusted_close => row[6].to_f
-          } unless first
-        dps << dp unless first
-        first = false
-      }
+          dp = {
+              :date => Utility::ParseDates::str_to_date(row[0]).to_i,
+              :open => row[1].to_f,
+              :high => row[2].to_f,
+              :low  => row[3].to_f,
+              :close => row[4].to_f,
+              :volume => row[5].to_i,
+              :adjusted_close => row[6].to_f,
+              :company_id => self.id
+            } unless first
+          dps << dp unless first
+          first = false
+        }
+      
+      # delete the file after use
+      File.delete("tmp/#{self.ticker}.csv") if File.exist?("tmp/#{self.ticker}.csv")
     rescue
       raise "Unable to load data for #{@ticker}"
     end

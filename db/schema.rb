@@ -9,7 +9,7 @@
 #
 # It's strongly recommended to check this file into your version control system.
 
-ActiveRecord::Schema.define(:version => 20100608153709) do
+ActiveRecord::Schema.define(:version => 20100622194250) do
 
   create_table "companies", :force => true do |t|
     t.string   "ticker"
@@ -19,6 +19,8 @@ ActiveRecord::Schema.define(:version => 20100608153709) do
     t.text     "profile"
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.date     "image_generation_time"
+    t.date     "last_update"
   end
 
   create_table "data_points", :force => true do |t|
@@ -33,5 +35,7 @@ ActiveRecord::Schema.define(:version => 20100608153709) do
     t.datetime "created_at"
     t.datetime "updated_at"
   end
+
+  add_index "data_points", ["date", "company_id"], :name => "index_data_points_on_date_and_company_id", :unique => true
 
 end

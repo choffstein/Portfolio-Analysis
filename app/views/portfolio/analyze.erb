@@ -53,7 +53,7 @@
       </div></td>
   </tr>
   <tr>
-    <td>Risk Decomposition</td>
+    <td>Portfolio Risk Decomposition by Holding</td>
     <td align="center"><div id="risk_results" style="visibility:hidden">
       </div>
       <%= link_to_remote "Run",
@@ -63,17 +63,27 @@
         :update => 'risk_results' %></td>
   </tr>
   <tr>
-    <td>Monte-Carlo Simulation</td>
-    <td align="center"><div id="mc_results" style="visibility:hidden">
+    <td>Return Projection (Monte-Carlo Simulation)</td>
+    <td align="center"><div id="return_mc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :monte_carlo},
-        :loading => "start_xhr('mc_results')",
-        :complete => "stop_xhr('mc_results')",
-        :update => 'mc_results' %></td>
+        :url => {:action => :return_monte_carlo},
+        :loading => "start_xhr('return_mc_results')",
+        :complete => "stop_xhr('return_mc_results')",
+        :update => 'return_mc_results' %></td>
   </tr>
 
   <tr>
-    <td>Return Deomposition (by Sector)</td>
+    <td>Income Projection (Monte-Carlo Simulation)</td>
+    <td align="center"><div id="income_mc_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :income_monte_carlo},
+        :loading => "start_xhr('income_mc_results')",
+        :complete => "stop_xhr('income_mc_results')",
+        :update => 'income_mc_results' %></td>
+  </tr>
+
+  <tr>
+    <td>Sector Exposure Deomposition</td>
     <td align="center"><div id="sector_rc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
         :url => {:action => :sector_return_decomposition},
@@ -83,12 +93,22 @@
   </tr>
 
   <tr>
-    <td>Style Decomposition</td>
+    <td>Style Drift Analysis</td>
     <td align="center"><div id="style_rc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
         :url => {:action => :style_return_decomposition},
         :loading => "start_xhr('style_rc_results')",
         :complete => "stop_xhr('style_rc_results')",
         :update => 'style_rc_results' %></td>
+  </tr>
+
+  <tr>
+    <td>Asset Exposure Decomposition</td>
+    <td align="center"><div id="asset_rc_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :asset_return_decomposition},
+        :loading => "start_xhr('asset_rc_results')",
+        :complete => "stop_xhr('asset_rc_results')",
+        :update => 'asset_rc_results' %></td>
   </tr>
 </table>

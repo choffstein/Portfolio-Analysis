@@ -19,6 +19,24 @@ Inf = 1.0/0
 #
 # x is the initial guess
 
+=begin
+        num_factors = factors.values.size
+        lb = GSL::Vector.alloc(num_factors)
+        lb.set_all(0.0)
+
+        ub = GSL::Vector.alloc(num_factors)
+        ub.set_all(1.0)
+
+        a = GSL::Vector.alloc(num_factors)
+        a.set_all(1.0)
+
+        initial_guess = GSL::Vector.alloc(num_factors)
+        initial_guess.set_all(1.0/num_factors)
+        x = QuadraticProgramming::generalized_smo(factor_returns.transpose * factor_returns,
+          -factor_returns.transpose * daily_fund_returns,
+          a, 1.0, lb.col, ub.col, initial_guess.col)
+=end
+
 module Optimization
   module QuadraticProgramming
     

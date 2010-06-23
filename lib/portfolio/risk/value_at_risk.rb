@@ -5,10 +5,12 @@ module Portfolio
       # to more appropriately determine the summary statistics for
       # a series of excess log-returns, and then adjusts the standard
       # value at risk statistic for skew and kurtosis factors
-      def self.cornish_fisher(log_returns, confidence_level=0.95)
+      # 
+      # See http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1535933
+      def self.cornish_fisher(log_returns, confidence_level=0.99)
         summary_stats = Statistics::Bootstrap.block_bootstrap(log_returns, 1000)
 
-        Rails.logger.info(summary_stats)
+        #Rails.logger.info(summary_stats)
         # one sided tail
         z = Statistics2.pnormaldist(confidence_level)
 
@@ -42,7 +44,7 @@ module Portfolio
         Status.info('Computing Cornish-Fisher VaRs')
         0.upto(n-1) { |i|
           value_at_risk = cornish_fisher(returns.row(i))
-          Rails.logger.info(value_at_risk)
+          #Rails.logger.info(value_at_risk)
           vars[i] =  value_at_risk[:var]
         }
 
@@ -63,7 +65,7 @@ module Portfolio
 
         weighted_risks = risks * weights
         
-        return (weighted_risks / weighted_risks.abs.sum)
+        return weighted_risks / weighted_risks.abs.sum
       end
     end
   end

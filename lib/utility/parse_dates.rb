@@ -6,10 +6,11 @@ module Utility
   module ParseDates
     include ThirdBase
 
-    # Month / Day / Year format
+    # Month-Day-Year format
     def self.str_to_date(str)
       begin
         year, month, day = str.split('-').map { |e| e.to_i }
+        
         #FIX: Use 12PM here to get around the 4 hour time difference hack
         return Time.utc(year, month, day, 12)
       rescue ArgumentError, TypeError
