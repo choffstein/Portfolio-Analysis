@@ -1,5 +1,8 @@
 module Portfolio
   module Risk
+
+    Standard_Normal_Distribution = Rubystats::NormalDistribution.new(0.0, 1.0)
+
     module ValueAtRisk
       # Cornish Fisher Value-at-Risk uses a boot-strapping method
       # to more appropriately determine the summary statistics for
@@ -7,34 +10,59 @@ module Portfolio
       # value at risk statistic for skew and kurtosis factors
       # 
       # See http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1535933
-      def self.cornish_fisher(log_returns, confidence_level=0.99)
-        summary_stats = Statistics::Bootstrap.block_bootstrap(log_returns, 1000)
+      def self.cornish_fisher(log_returns, days = 1, confidence_level=0.99)
+        series = Statistics::Bootstrap.block_bootstrap(log_returns, 1000)
 
-        #Rails.logger.info(summary_stats)
+        n = series.size1
+        
+        means = GSL::Vector.alloc(n)
+        variances = GSL::Vector.alloc(n)
+        skews = GSL::Vector.alloc(n)
+        kurtoses = GSL::Vector.alloc(n)
+
+        n.times { |i|
+          row = series.row(i)
+
+          #the row is daily log returns
+          #we need to take the cumsum then 'days' differences
+          cumulative = row.cumsum
+
+          m = cumulative.size
+          differences = cumulative.get(days, m-days) - cumulative.get(0, m-days)
+
+          means[i] = differences.mean
+          variances[i] = differences.variance_m(means[i])
+          #sd = Math.sqrt(variances[i])
+          skews[i] = differences.skew #FIX: skew(means[i], sd)
+          kurtoses[i] = differences.kurtosis #FIX: kurtosis(means[i], sd)
+        }
+
+        mean = means.mean
+        variance = variances.mean
+        skewness = skews.mean
+        kurtosis = kurtoses.mean
+
         # one sided tail
         z = Statistics2.pnormaldist(confidence_level)
 
         # see http://www.riskglossary.com/link/cornish_fisher.htm
         za = z + 
-             (1.0/6.0)*(z**2 - 1.0)*summary_stats[:skewness] +
-             (1.0/24.0)*(z**3 - 3.0*z)*(summary_stats[:kurtosis]) -
-             (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(summary_stats[:skewness]**2)
+             (1.0/6.0)*(z**2 - 1.0)*skewness +
+             (1.0/24.0)*(z**3 - 3.0*z)*kurtosis -
+             (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(skewness**2)
         
-        var = 1 - Math.exp(summary_stats[:mean] -
-                  za * Math.sqrt(summary_stats[:variance]))
+        var = 1 - Math.exp(mean - za * Math.sqrt(variance))
 
-        normal_distribution = Rubystats::NormalDistribution.new(0.0, 1.0)
         
-        cvar = 1 - Math.exp(summary_stats[:mean] -
-                                Math.sqrt(summary_stats[:variance]) *
-                                normal_distribution.pdf(za) /
-                                normal_distribution.cdf(za))
+        cvar = 1 - Math.exp(mean - Math.sqrt(variance) *
+                                Standard_Normal_Distribution.pdf(za) /
+                                Standard_Normal_Distribution.cdf(za))
 
         return {:var => var, :cvar => cvar}
       end
 
       # See "HotSpots and Hedges" paper by Litterman, Goldman Sachs
-      def self.composite_risk(portfolio_state)
+      def self.composite_risk(portfolio_state, days = 1)
         Status.info('Computing composite risk')
         # log-returns are row oriented
         returns = portfolio_state.log_returns
@@ -43,7 +71,7 @@ module Portfolio
         vars = GSL::Vector.alloc(n)
         0.upto(n-1) { |i|
           Status.info("Computing Cornish-Fisher VaRs (#{i+1}/#{n})")
-          value_at_risk = cornish_fisher(returns.row(i))
+          value_at_risk = cornish_fisher(returns.row(i), days)
           #Rails.logger.info(value_at_risk)
           vars[i] =  value_at_risk[:var]
         }

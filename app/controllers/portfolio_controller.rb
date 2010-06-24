@@ -38,11 +38,12 @@ class PortfolioController < ApplicationController
             state = Portfolio::State.new({:tickers => session[:portfolio].tickers,
                 :number_of_shares => session[:portfolio].shares})
 
-            offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+            offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
             sliced_state = state.slice(offset) # 5 years
             mc_series = sliced_state.return_monte_carlo
 
-            x_data = (1..200).to_a
+            x_series_size = mc_series[:means].size
+            x_data = (1..x_series_size).to_a
 
             means = (mc_series[:means]).to_a
             one_std_above = (mc_series[:means] +
@@ -59,13 +60,15 @@ class PortfolioController < ApplicationController
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
-            lc.title = "200 Day Projection (Monte Carlo Simulation with n = 2500)"
+            lc.title = "#{x_series_size} Day Projection (Monte Carlo Simulation with n = 10,000)"
 
-            lc.data "Mean Return", means, '000000', "5,0,0"
-            lc.data "2 Pos. Std. Devs", two_std_above, '4AC948', "3,6,3"
             lc.data "1 Pos. Std. Devs", one_std_above, 'BCED91', "1,6,3"
             lc.data "1 Neg. Std. Devs", one_std_below, 'EEB4B4', "1,6,3"
+
+            lc.data "2 Pos. Std. Devs", two_std_above, '4AC948', "3,6,3"
             lc.data "2 Neg. Std. Devs", two_std_below, 'FF3D0D', "3,6,3"
+
+            lc.data "Mean Return", means, '000000', "3,0,0"
 
             lc.encoding = :extended
             lc.show_legend = true
@@ -100,31 +103,43 @@ class PortfolioController < ApplicationController
                 :number_of_shares => session[:portfolio].shares})
 
             mc_series = state.income_monte_carlo
+            initial_income = state.to_income_stream[-1]
 
-            x_data = [1,2,3,4]
+            x_data = [0,1,2,3,4]
 
             means = (mc_series[:means]).to_a
+            means.unshift(initial_income)
+            
             one_std_above = (mc_series[:means] +
                       mc_series[:upside_standard_deviations]).to_a
+            one_std_above.unshift(initial_income)
+
             two_std_above = (mc_series[:means] +
                 2.0 * mc_series[:upside_standard_deviations]).to_a
-
+            two_std_above.unshift(initial_income)
+            
             one_std_below = (mc_series[:means] -
                       mc_series[:downside_standard_deviations]).to_a
+            one_std_below.unshift(initial_income)
+            
             two_std_below = (mc_series[:means] -
                 2.0 * mc_series[:downside_standard_deviations]).to_a
-
+            two_std_below.unshift(initial_income)
+            
             Status.info("Generating graphic")
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
             lc.title = "4 Quarter Income Projection (Monte Carlo Simulation with n = 2500)"
 
-            lc.data "Mean Return", means, '000000', "5,0,0"
-            lc.data "2 Pos. Std. Devs", two_std_above, '4AC948', "3,6,3"
+            
             lc.data "1 Pos. Std. Devs", one_std_above, 'BCED91', "1,6,3"
             lc.data "1 Neg. Std. Devs", one_std_below, 'EEB4B4', "1,6,3"
+
             lc.data "2 Neg. Std. Devs", two_std_below, 'FF3D0D', "3,6,3"
+            lc.data "2 Pos. Std. Devs", two_std_above, '4AC948', "3,6,3"
+
+            lc.data "Mean Return", means, '000000', "3,0,0"
 
             lc.encoding = :extended
             lc.show_legend = true
@@ -133,18 +148,59 @@ class PortfolioController < ApplicationController
                                       two_std_above.max.ceil],
             :color => '000000', :font_size => 16, :alignment => :center
 
-            lc.axis :bottom, :range => [x_data[0].floor, x_data[-1].ceil],
-            :color => '000000', :font_size => 16, :alignment => :center,
-            :labels => [1,2,3,4]
-
-            extras = {
-              :chg => "10,10,1,5"
-            }
+            lc.axis :bottom, :range => [x_data[0], x_data[-1]],
+              :color => '000000', :font_size => 16, :alignment => :center,
+              :labels => [0,1,2,3,4]
            
             #FIX: This seems like a rather ugly way to do this
-            lc.write_to("public/images/portfolio/return_monte_carlo", {:chdlp => 'b'})
+            lc.write_to("public/images/portfolio/income_monte_carlo", {:chdlp => 'b'})
 
-            render :inline => "<%= image_tag(\"portfolio/return_monte_carlo.png\") %>"
+            render :inline => "<%= image_tag(\"portfolio/income_monte_carlo.png\") %>"
+          end
+        }
+      end
+    end
+
+    def sector_allocation
+      respond_to do |wants|
+        wants.js {
+          if session[:portfolio].nil?
+            render :text => "Please upload portfolio first"
+          else
+
+            tickers = session[:portfolio].tickers
+
+            @chart = GoogleVisualr::PieChart.new
+            @chart.add_column('string', 'Sector')
+            @chart.add_column('number', 'Holdings')
+
+            sector_hash = Hash.new(0.0)
+
+            tickers.each { |ticker|
+              company = Company.first(:conditions => {:ticker => ticker.downcase})
+              if company.nil?
+                company = Company.new({:ticker => ticker.downcase})
+                company.save!
+              end
+
+              sector_hash[company.sector] += 1
+            }
+
+            @chart.add_rows(sector_hash.size)
+            i = 0
+            sector_hash.each { |k, v|
+              @chart.set_value(i, 0, k)
+              @chart.set_value(i, 1, v)
+              i = i + 1
+            }
+
+            options = { :width => 600, :height => 400,
+              :title => "Sector Allocation (Dow Jones Definition)", :is3D => true }
+            options.each_pair { | key, value |
+              @chart.send "#{key}=", value
+            }
+
+            render :inline => "<%= @chart.render('sector_allocation_results') %>"
           end
         }
       end
@@ -156,15 +212,15 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            t = Time.now
             tickers = session[:portfolio].tickers
             state = Portfolio::State.new({:tickers => tickers,
                 :number_of_shares => session[:portfolio].shares})
-            offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+            offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
             sliced_state = state.slice(offset) # 5 years
-            composite_risk = Portfolio::Risk::ValueAtRisk.composite_risk(sliced_state)
 
-            total = Time.now - t
+            days = params[:days].to_i
+            composite_risk = Portfolio::Risk::ValueAtRisk.composite_risk(sliced_state, days)
+
 =begin
           GoogleChart::PieChart.new do |pc|
             pc.height = 400
@@ -194,12 +250,12 @@ class PortfolioController < ApplicationController
               @chart.set_value(i, 1, composite_risk[i])
             }
             options = { :width => 600, :height => 400,
-              :title => 'Risk Decomposition', :is3D => true }
+              :title => "#{days} Day Risk Decomposition", :is3D => true }
             options.each_pair { | key, value |
               @chart.send "#{key}=", value
             }
 
-            render :inline => "<%= @chart.render('risk_results') %>"
+            render :inline => "<%= @chart.render(\"#{days}_day_risk_results\") %>"
           end
         }
       end
@@ -212,7 +268,7 @@ class PortfolioController < ApplicationController
           tickers = session[:portfolio].tickers
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
-          offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
           window_size = 60
@@ -226,7 +282,7 @@ class PortfolioController < ApplicationController
           r_squared = return_values[:r2]
 
           sa = GoogleChart::StackedArea.new
-          sa.title = "Return Decomposition by U.S. Sector"
+          sa.title = "Return Decomposition by U.S. Sector (S&P Definition)"
           sa.width = 600
           sa.height = 300
           sa.show_legend = true
@@ -247,7 +303,7 @@ class PortfolioController < ApplicationController
           end
 
           sa.axis :bottom, :alignment => :center, :color => "000000",
-          :font_size => 16, :range => [1,x_axis_length]
+          :font_size => 16, :range => [1, x_axis_length]
 
           lc = GoogleChart::LineChart.new
           lc.width = 600
@@ -283,7 +339,7 @@ class PortfolioController < ApplicationController
           tickers = session[:portfolio].tickers
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
-          offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
           factors = Portfolio::Composition::ReturnAnalysis::STYLE_PROXIES
@@ -295,8 +351,8 @@ class PortfolioController < ApplicationController
 
           points = []
           betas.size2.times { |i|
-            break_down = Portfolio::Composition::ReturnAnalysis::proportions_to_style(betas.column(i))
-            points << break_down[:location].to_a
+            location = Portfolio::Composition::ReturnAnalysis::proportions_to_style(betas.column(i))
+            points << location.to_a
           }
 
           total_points = points.size
@@ -339,6 +395,69 @@ class PortfolioController < ApplicationController
       end
     end
 
+    def rate_return_sensitivity
+      respond_to do |wants|
+        wants.js {
+
+          tickers = session[:portfolio].tickers
+          state = Portfolio::State.new({:tickers => tickers,
+              :number_of_shares => session[:portfolio].shares})
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
+          sliced_state = state.slice(offset) # ~5 years
+
+          factors = Portfolio::Composition::ReturnAnalysis::RATE_PROXIES
+          return_values = Portfolio::Composition::ReturnAnalysis::composition_by_factors(sliced_state, factors)
+          #get a return composition on the sliced-state
+
+          betas = return_values[:betas]
+          r_squared = return_values[:r2]
+
+          points = []
+          betas.size2.times { |i|
+            location = Portfolio::Composition::ReturnAnalysis::proportions_to_rate_and_credit_sensitivity(betas.column(i))
+            points << location.to_a
+          }
+
+          total_points = points.size
+          colors = []
+          (total_points-1).times { |i|
+            colors << greyscale_to_rgb(i / total_points.to_f)
+          }
+          colors.unshift("FF0000") #current time is red
+
+          # Scatter Plot
+          sc = GoogleChart::ScatterPlot.new
+          sc.width = 400
+          sc.height = 400
+          sc.title = "Rate & Credit Sensitivity"
+          sc.data "", points, colors.reverse
+          sc.encoding = :extended
+
+          #sc.data "Style Points", points, colors
+          sc.max_x = 1
+          sc.max_y = 1
+          sc.min_x = -1
+          sc.min_y = -1
+          sc.point_sizes Array.new(points.size,1)
+
+          sc.axis(:bottom, :range => -1..1, :labels => ['Short', 'Medium', 'Long'])
+          sc.axis(:left, :range => -1..1, :labels => ['Low', 'Medium', 'High'])
+          sc.axis(:top, :range => -1..1, :labels => ['Short', 'Medium', 'Long'])
+          sc.axis(:right, :range => -1..1, :labels => ['Low', 'Medium', 'High'])
+
+          #FIX: This seems like a rather ugly way to do this
+          extras = {
+            :chg => "33.33,33.33,1,5"
+          }
+          sc.write_to("public/images/portfolio/rate_and_credit_return_decomposition", extras)
+
+          #send_data(sa.fetch_image, :type => 'image/png',
+          #          :file_name => 'Return Composition', :disposition => 'inline')
+          render :inline => "<%= image_tag(\"portfolio/rate_and_credit_return_decomposition.png\") %>"
+        }
+      end
+    end
+
     def asset_return_decomposition
       respond_to do |wants|
         wants.js {
@@ -346,7 +465,7 @@ class PortfolioController < ApplicationController
           tickers = session[:portfolio].tickers
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
-          offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
           window_size = 60
@@ -422,7 +541,7 @@ class PortfolioController < ApplicationController
 
           state = Portfolio::State.new({:tickers => tickers,
                                         :number_of_shares => shares})
-          offset = (state.dates.size - 1000) < 0 ? 0 : (state.dates.size - 1000)
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
           risks_and_returns = sliced_state.risk_to_return
           
@@ -432,7 +551,6 @@ class PortfolioController < ApplicationController
           }
 
           risks_and_returns.map! { |e| [e[0]*100, e[1]*100] }
-
           Rails.logger.info(risks_and_returns)
 
           tickers << "Portfolio"
@@ -440,25 +558,22 @@ class PortfolioController < ApplicationController
 
           @chart = GoogleVisualr::ScatterChart.new
           @chart.add_column('number', 'Risk')
+          #@chart.add_column('string', 'Ticker')
 
           risks_and_returns.size.times { |i|
             @chart.add_column('number', "#{tickers[i]}")
           }
-
           @chart.add_rows(risks_and_returns.size)
           
           risks_and_returns.size.times { |i|
             risk, ret = risks_and_returns[i]
-
             @chart.set_value( i, 0, risk  )
-            1.upto(risks_and_returns.size) { |j|
-              @chart.set_value( i, j, nil ) if i+1 != j
-              @chart.set_value( i, j, ret ) if i+1 == j
-            }
+            #@chart.set_value( i, 1, tickers[i])
+            @chart.set_value( i, i+1, ret )
           }
 
           options = { :width => 600,
-                      :height => 600,
+                      :height => 400,
                       :titleX => 'Risk',
                       :titleY => 'Return',
                       :legend => 'bottom`',

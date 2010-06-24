@@ -156,39 +156,38 @@ module Portfolio
 
     #FIX: This should be cached?
     def to_income_stream
-      income = Hash.new(0.0)
+      begin income = Hash.new(0.0)
+        @tickers.size.times { |i|
+          ticker = @tickers[i]
+          shares = @number_of_shares[i]
 
-      @tickers.size.times { |i|
-        ticker = @tickers[i]
-        shares = @number_of_shares[i]
+          c = Company.first(:conditions => {:ticker => ticker})
 
-        c = Company.first(:conditions => {:ticker => ticker})
-
-        c.dividends.each { |k,v|
-          income[k] += shares * v
+          c.dividends.each { |k,v|
+            income[k] += shares * v
+          }
         }
-      }
 
-      income = Hash[income.sort]
-      v = GSL::Vector.alloc(income.size)
-      i = 0
-      income.each { |key,value|
-        v[i] = value
-        i = i + 1
-      }
+        income = Hash[income.sort]
+        @income_stream = GSL::Vector.alloc(income.size)
+        i = 0
+        income.each { |key, value|
+          @income_stream[i] = value
+          i = i + 1
+        }
+      end if @income_stream.nil?
 
-      return v
+      return @income_stream
     end
 
-    def risk_to_return(periods = 1000, n = 2500, block_size = 20, weight_factor = 0.998401279)
+    def risk_to_return(periods = 1250, n = 2500, block_size = 25, weight_factor = 0.998401279)
       means_variances = []
       @log_returns.size1.times { |i|
         Status.info("Performing Risk vs Return simulation on #{@tickers[i]}")
         lr = @log_returns.row(i)
-        summary_stats = Statistics::Bootstrap::block_bootstrap(lr, periods,
-          block_size, n, weight_factor)
+        series = Statistics::Bootstrap::block_bootstrap(lr, periods,
+                                block_size, n, weight_factor)
 
-        series = summary_stats[:series]
         returns = GSL::Vector.alloc(series.size1)
         series.size1.times { |j|
           v = series.row(j).map { |e| Math.exp(e) }.cumprod
@@ -200,9 +199,9 @@ module Portfolio
 
       Status.info("Performing Risk vs Return simulation on Portfolio")
       # compute the portfolio mean / variance
-      summary_stats = Statistics::Bootstrap::block_bootstrap(self.to_log_returns,
+      series = Statistics::Bootstrap::block_bootstrap(self.to_log_returns,
                               periods, block_size, n, weight_factor)
-      series = summary_stats[:series]
+
       returns = GSL::Vector.alloc(series.size1)
       series.size1.times { |j|
         v = series.row(j).map { |e| Math.exp(e) }.cumprod
@@ -220,31 +219,29 @@ module Portfolio
       
       # transform the income stream into log returns
       current_income = historic_income[-1]
-      historic_income.map! { |v| Math.log(v) }
+      log_historic_income = historic_income.map { |v| Math.log(v) }
 
-      length = historic_income.size
-      log_returns = historic_income.get(1,length-1) -
-                                    historic_income.get(0,length-1)
+      length = log_historic_income.size
+      log_returns = log_historic_income.get(1,length-1) -
+                                    log_historic_income.get(0,length-1)
       
       # drastically over-weight recent income growth versus historic
       return monte_carlo(log_returns, current_income,
-                          periods_forward, n, block_size, 0.975)
+                          periods_forward, n, block_size, 0.85)
     end
 
-    def return_monte_carlo(periods_forward = 1000, n = 2500, block_size = 20)
+    def return_monte_carlo(periods_forward = 250, n = 10000, block_size = 10)
       Status.info("Performing return monte-carlo simulation on portfolio")
       return monte_carlo(self.to_log_returns, compute_current_portfolio_value,
-                          periods_forward, n, block_size)
+                          periods_forward, n, block_size, 0.9995)
     end
 
     private
 
-    def monte_carlo(log_returns, initial_value, periods_forward = 1000,
-                      n = 2500, block_size = 20, weight_factor = 0.998401279)
-      results = Statistics::Bootstrap::block_bootstrap(log_returns, 
+    def monte_carlo(log_returns, initial_value, periods_forward = 1250,
+                      n = 2500, block_size = 25, weight_factor = 1.0)
+      series = Statistics::Bootstrap::block_bootstrap(log_returns,
                                 periods_forward, block_size, n, weight_factor)
-      series = results[:series]
-
 
       # given our current portfolio value and a series of log returns,
       # we need to come up with a series of portfolio values
@@ -391,8 +388,8 @@ module Portfolio
           n.times { |j|
             pi[i,j] = 0
             num_dates.times { |t|
-              pi[i,j] += ((log_returns[i,t] - mean_log_returns[i]) *
-                          (log_returns[j,t] - mean_log_returns[j]) -
+              pi[i,j] += (((@log_returns[i,t] - mean_log_returns[i]) *
+                          (@log_returns[j,t] - mean_log_returns[j])) -
                                       @sample_covariance_matrix[i,j]) ** 2
             }
             pi[i,j] = pi[i,j] / num_dates.to_f
@@ -426,16 +423,15 @@ module Portfolio
 
         kappa_hat = (pi_hat - rho_hat) / gamma_hat
         #Rails.logger.info("Kappa-Hat: #{kappa_hat}")
-
-        delta_hat = [0.0, [kappa_hat / num_dates, 1.0].min].max
+        begin
+          delta_hat = [0.0, [kappa_hat / num_dates, 1.0].min].max
+        rescue
+          delta_hat = 0.0
+        end
         #Rails.logger.info("Delta-Hat: #{delta_hat}")
 
         @covariance_matrix = delta_hat * f + (1.0 - delta_hat)*@sample_covariance_matrix
 
-        #Rails.logger.info("Sample")
-        #Rails.logger.info(@sample_covariance_matrix)
-        #Rails.logger.info("Shrunk")
-        #Rails.logger.info(@covariance_matrix)
       end unless !@covariance_matrix.nil?
     end
 

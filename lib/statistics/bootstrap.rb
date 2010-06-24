@@ -77,26 +77,7 @@ module Statistics
         }
       }
 
-      means = GSL::Vector.alloc(n)
-      variances = GSL::Vector.alloc(n)
-      skews = GSL::Vector.alloc(n)
-      kurtoses = GSL::Vector.alloc(n)
-
-      0.upto(n-1) { |i|
-        row = series.row(i)
-        means[i] = row.mean
-        variances[i] = row.variance_m(means[i])
-        #sd = Math.sqrt(variances[i])
-        skews[i] = row.skew #FIX: skew(means[i], sd)
-        kurtoses[i] = row.kurtosis #FIX: kurtosis(means[i], sd)
-      }
-      return {
-        :mean => means.mean,
-        :variance => variances.mean,
-        :skewness => skews.mean,
-        :kurtosis => kurtoses.mean,
-        :series => series
-      }
+      return series
     end
   end
 end

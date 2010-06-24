@@ -33,16 +33,22 @@ module Portfolio
 
       STYLE_PROXIES = {
         'Large Cap Value' => 'VTV',
-        #'Large Cap Blend' => 'VV',
         'Large Cap Growth' => 'VUG',
 
         'Mid Cap Value' => 'VOE',
-        #'Mid Cap Blend' => 'VO',
         'Mid Cap Growth' => 'VOT',
 
         'Small Cap Value' => 'VBR',
-        #'Small Cap Blend' => 'VB',
         'Small Cap Growth' => 'VBK'
+      }
+
+      RATE_PROXIES = {
+        'High Credit' => 'BND',
+        'Low Credit' => 'HYG',
+        #'Long Interest' => 'CFT',
+        #'Short Interest' => 'BSV',
+        'Long Interest' => 'TLT',
+        'Short Interest' => 'SHY'
       }
 
       def self.composition_by_factors(portfolio_state, factors, window_size=60, sampling_period=10)
@@ -91,20 +97,31 @@ module Portfolio
         #   1) 100% in one box (variance = ((1 - 1/9)^2 + 8*(0 - 1/9)^2) / 9 ) -- we want a infinitely small point
         #   2) 1/9 in each box (variance = 0) -- we want a unit circle
         style_boxes = GSL::Matrix[[-1,  1],
-                                 #[ 0,  1],
                                   [ 1,  1],
                                   [-1,  0],
-                                 #[ 0,  0],
                                   [ 1,  0],
                                   [-1, -1],
-                                 #[ 0, -1],
                                   [ 1, -1]];
 
-        max_variance = 72.0 / 729.0
         location = proportions.row * style_boxes
-        size = 1 - proportions.var / max_variance
 
-        return {:location => location, :size => size}
+        return location
+      end
+
+      def self.proportions_to_rate_and_credit_sensitivity(proportions)
+        #Two extremes for style box allocation
+        #   1) 100% in one box (variance = ((1 - 1/9)^2 + 8*(0 - 1/9)^2) / 9 ) -- we want a infinitely small point
+        #   2) 1/9 in each box (variance = 0) -- we want a unit circle
+        style_boxes = GSL::Matrix[[0, 1],
+                                  [0, -1],
+                                  [1, 0],
+                                  [-1, 0]];
+
+        location =  (proportions.row * style_boxes)
+
+        # we need to project from unit 'diamond' to unit square
+        # aka (1/2, 1/2) should be stretched to (1,1)
+        return location
       end
 
       def self.pca(portfolio_state)

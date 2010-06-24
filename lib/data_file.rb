@@ -38,9 +38,17 @@ class DataFile
       method_string = method.to_s.underscore
       return @data[method_string] unless @data[method_string].nil?
       return @data[method_string.singularize] unless @data[method_string.singularize].nil?
-      raise
+      begin
+        super
+      rescue
+        []
+      end
     else
-      raise
+      begin
+        super
+      rescue
+        []
+      end
     end
   end
 

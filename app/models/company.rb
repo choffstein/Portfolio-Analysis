@@ -178,11 +178,12 @@ class Company < ActiveRecord::Base
     data = Net::HTTP.get URI.parse("http://ichart.finance.yahoo.com/table.csv?s=#{self.ticker}&g=v&ignore=.csv")
 
     Status.info("Parsing dividend information for #{self.ticker}")
-    dividends = {}
 
+    dividends = {}
     i = 0
     first = true
     current_quarter = nil
+    dividends_per_year = Hash.new(0.0)
     CSV.parse(data) { |row|
       if !first
         date = Utility::ParseDates::str_to_date(row[0])
@@ -206,6 +207,7 @@ class Company < ActiveRecord::Base
         
         if dividends[key].nil?
           dividends[key] =  dividend
+          dividends_per_year[date.year] += 1
         else
           #they put two dividends in the same quarter
           # is it a special dividend or should we just bump a quarter
@@ -229,6 +231,9 @@ class Company < ActiveRecord::Base
             if dividends[previous_key].nil?
               dividends[key] = [dividends[key], dividend].min
             else
+              # choose the entry that is closest to the previous quarterly
+              # payment.  would probably be better if we used a 'best fit growth'
+              # line to estimate which payments are outliers, but this works
               distance_one = (Math.log(dividends[previous_key])-dividends[key]).abs
               distance_two = (Math.log(dividends[previous_key])-dividend).abs
 
@@ -237,12 +242,31 @@ class Company < ActiveRecord::Base
               end
             end
           else
-            # these are probably monthly dividends -- add it to the quarterly
+            # these are probably monthly dividends
+            # add it to the current quarter
             dividends[key] +=  dividend
+            dividends_per_year[date.year] += 1
           end
         end
       end
       first = false
+    }
+
+    # if dividends are annual or semi-annual, split them up to make them
+    # quarterly
+    dividends_per_year.each { |k,v|
+      if v < 4 && k != Date.today.year #make sure it isn't the current year...
+        q1 = dividends["#{k}Q1"].nil? ? 0.0 : dividends["#{k}Q1"]
+        q2 = dividends["#{k}Q2"].nil? ? 0.0 : dividends["#{k}Q2"]
+        q3 = dividends["#{k}Q3"].nil? ? 0.0 : dividends["#{k}Q3"]
+        q4 = dividends["#{k}Q4"].nil? ? 0.0 : dividends["#{k}Q4"]
+        total = q1 + q2 + q3 + q4
+
+        dividends["#{k}Q1"] = total/4.0
+        dividends["#{k}Q2"] = total/4.0
+        dividends["#{k}Q3"] = total/4.0
+        dividends["#{k}Q4"] = total/4.0
+      end
     }
 
     return dividends
