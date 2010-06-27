@@ -59,17 +59,31 @@
         :url => {:action => :risk_to_return},
         :loading => "start_xhr('risk_vs_return_results')",
         :complete => "stop_xhr('risk_vs_return_results')",
-        :update => 'risk_vs_return_results' %></td>
+        :update => 'risk_vs_return_results' %>
+    </td>
   </tr>
+
   <tr>
-    <td>20 Day Portfolio Risk Decomposition by Holding</td>
+    <td>Contribution to Volatility</td>
+    <td align="center"><div id="volatlity_analysis_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :volatility_analysis},
+        :loading => "start_xhr('volatlity_analysis_results')",
+        :complete => "stop_xhr('volatlity_analysis_results')",
+        :update => 'volatlity_analysis_results' %>
+    </td>
+  </tr>
+  
+  <tr>
+    <td>20-Day VaR Decomposition</td>
     <td align="center"><div id="20_day_risk_results" style="visibility:hidden">
       </div>
       <%= link_to_remote "Run",
         :url => {:action => :risk_decomposition, :days => 20},
         :loading => "start_xhr('20_day_risk_results')",
         :complete => "stop_xhr('20_day_risk_results')",
-        :update => '20_day_risk_results' %></td>
+        :update => '20_day_risk_results' %>
+    </td>
   </tr>
   <tr>
     <td>Return Projection (Monte-Carlo Simulation)</td>
@@ -78,7 +92,8 @@
         :url => {:action => :return_monte_carlo},
         :loading => "start_xhr('return_mc_results')",
         :complete => "stop_xhr('return_mc_results')",
-        :update => 'return_mc_results' %></td>
+        :update => 'return_mc_results' %>
+    </td>
   </tr>
 
   <tr>
@@ -88,7 +103,8 @@
         :url => {:action => :income_monte_carlo},
         :loading => "start_xhr('income_mc_results')",
         :complete => "stop_xhr('income_mc_results')",
-        :update => 'income_mc_results' %></td>
+        :update => 'income_mc_results' %>
+    </td>
   </tr>
   <tr>
     <td>Sector Allocation</td>
@@ -97,7 +113,8 @@
         :url => {:action => :sector_allocation},
         :loading => "start_xhr('sector_allocation_results')",
         :complete => "stop_xhr('sector_allocation_results')",
-        :update => 'sector_allocation_results' %></td>
+        :update => 'sector_allocation_results' %>
+    </td>
   </tr>
   <tr>
     <td>Sector Return Deomposition</td>
@@ -106,7 +123,8 @@
         :url => {:action => :sector_return_decomposition},
         :loading => "start_xhr('sector_rc_results')",
         :complete => "stop_xhr('sector_rc_results')",
-        :update => 'sector_rc_results' %></td>
+        :update => 'sector_rc_results' %>
+    </td>
   </tr>
 
   <tr>
@@ -116,7 +134,8 @@
         :url => {:action => :style_return_decomposition},
         :loading => "start_xhr('style_rc_results')",
         :complete => "stop_xhr('style_rc_results')",
-        :update => 'style_rc_results' %></td>
+        :update => 'style_rc_results' %>
+    </td>
   </tr>
 
   <tr>
@@ -126,7 +145,8 @@
         :url => {:action => :rate_return_sensitivity},
         :loading => "start_xhr('rate_and_credit_rc_results')",
         :complete => "stop_xhr('rate_and_credit_rc_results')",
-        :update => 'rate_and_credit_rc_results' %></td>
+        :update => 'rate_and_credit_rc_results' %>
+    </td>
   </tr>
 
   <tr>
@@ -136,6 +156,18 @@
         :url => {:action => :asset_return_decomposition},
         :loading => "start_xhr('asset_rc_results')",
         :complete => "stop_xhr('asset_rc_results')",
-        :update => 'asset_rc_results' %></td>
+        :update => 'asset_rc_results' %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>3-Month Up/Down Capture Analysis</td>
+    <td align="center"><div id="up_down_capture_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :up_down_capture},
+        :loading => "start_xhr('up_down_capture_results')",
+        :complete => "stop_xhr('up_down_capture_results')",
+        :update => 'up_down_capture_results' %>
+    </td>
   </tr>
 </table>

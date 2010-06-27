@@ -236,6 +236,37 @@ module Portfolio
                           periods_forward, n, block_size, 0.9995)
     end
 
+    def portfolio_value_over_time
+      begin
+        @portfolio_value = GSL::Vector.alloc(@dates.size)
+        @portfolio_value.set_all(0.0)
+
+        @dates.size.times { |t|
+          @tickers.size.times { |i|
+            @portfolio_value += @number_of_shares[i] *
+                                          @time_series[@tickers[i]][@dates[t]]
+          }
+        }
+      end if @portfolio_value.nil?
+      return @portfolio_value
+    end
+
+    def weights_over_time
+      begin
+        portfolio_value = self.portfolio_value_over_time
+        @weights_over_time = GSL::Matrix.alloc(@tickers.size, @dates.size)
+        @dates.size.times { |t|
+          @tickers.size.times { |i|
+            @weights_over_time[i,t] = @number_of_shares[i] *
+                                      @time_series[@tickers[i]][@dates[t]] /
+                                      @portfolio_value[t]
+          }
+        }
+        
+      end if @weights_over_time.nil?
+      return @weights_over_time
+    end
+    
     private
 
     def monte_carlo(log_returns, initial_value, periods_forward = 1250,
@@ -360,7 +391,7 @@ module Portfolio
         @covariance_matrix = GSL::Matrix.alloc(n, n)
 
         r_bar = (@sample_correlation_matrix.upper -
-              GSL::Matrix.diagonal(@sample_correlation_matrix.diagonal)).to_v.sum
+                GSL::Matrix.diagonal(@sample_correlation_matrix.diagonal)).to_v.sum
         r_bar = (r_bar * 2.0) / (n*(n-1))
 
         #0.upto(@tickers.size-2) { |i|
@@ -423,10 +454,11 @@ module Portfolio
 
         kappa_hat = (pi_hat - rho_hat) / gamma_hat
         #Rails.logger.info("Kappa-Hat: #{kappa_hat}")
+
         begin
           delta_hat = [0.0, [kappa_hat / num_dates, 1.0].min].max
         rescue
-          delta_hat = 0.0
+          delta_hat = 0.0 #one stock portfolio -- corner case
         end
         #Rails.logger.info("Delta-Hat: #{delta_hat}")
 

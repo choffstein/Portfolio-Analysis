@@ -16,30 +16,37 @@ module Portfolio
         'Real Estate' => 'VNQ'
       }
 
+      WORLD_EQUITY_PROXIES = {
+        'United States of America' => 'IWV',
+        'Europe' => 'VGK',
+        'Russia' => 'RSX',
+        'Latin America' => 'ILF',
+        'Japan' => 'EWJ',
+        'Pacific / Asia Ex-Japan' => 'EPP',
+        'India' => 'INP'
+      }
+
       ASSET_PROXIES = {
-        'U.S. Equities' => 'SPY',
-        'EAFE Equities' => 'EFA',
+        'U.S. Equity' => 'IWV',
+        'Europe, Asian & Far East Equity' => 'EFA',
         'Emerging Market Equities' => 'VWO',
 
-        'International (Ex-US) Treasuries' => 'BWX',
-        'Corporate Bonds' => 'JNK',
-        'U.S. Short Term Treasuries (1-3)' => 'SHY',
-        'U.S. Long Term Treasuries (20+)' => 'TLT',
+        'U.S. Corporate & Treasury Bonds' => 'AGG',
 
         'Commodities' => 'DBC',
-        
-        'International Real Estate' => 'RWX'
+         
+        'U.S. Real Estate' => 'VNQ'
       }
 
       STYLE_PROXIES = {
-        'Large Cap Value' => 'VTV',
-        'Large Cap Growth' => 'VUG',
+        'Large Cap Value' => 'VTV', #IWD
+        'Large Cap Growth' => 'VUG', #IWF
 
         'Mid Cap Value' => 'VOE',
         'Mid Cap Growth' => 'VOT',
 
-        'Small Cap Value' => 'VBR',
-        'Small Cap Growth' => 'VBK'
+        'Small Cap Value' => 'VBR', #IWN
+        'Small Cap Growth' => 'VBK' #IWO
       }
 
       RATE_PROXIES = {

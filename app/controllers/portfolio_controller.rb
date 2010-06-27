@@ -29,6 +29,83 @@ class PortfolioController < ApplicationController
     @company.dividends
   end
 
+  def volatility_analysis
+    respond_to do |wants|
+      wants.js {
+        if session[:portfolio].nil?
+          render :text => "Please upload portfolio first"
+        else
+          tickers = session[:portfolio].tickers.sort
+          state = Portfolio::State.new({:tickers => tickers,
+              :number_of_shares => session[:portfolio].shares})
+
+          window_size = 60
+          sampling_period = 20
+          
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
+          sliced_state = state.slice(offset) # 5 years
+
+          marginal_contributions = Portfolio::Risk.marginal_contribution_to_volatility(sliced_state.to_log_returns,
+            sliced_state.log_returns, window_size, sampling_period)
+
+          contributions = Portfolio::Risk.contributions_to_volatility(sliced_state, sliced_state.log_returns,
+            window_size, sampling_period, marginal_contributions)
+
+          sa = GoogleChart::StackedArea.new
+          sa.title = "3 Month Contribution to Volatility (measured monthly)"
+          sa.width = 600
+          sa.height = 300
+          sa.show_legend = true
+          sa.encoding = :extended
+
+          x_axis_length = contributions.row(0).size * sampling_period
+
+          colors = random_colors(tickers.size)
+          
+          contributions.size1.times { |i|
+            sa.data "#{tickers[i]}", contributions.row(i).to_a.map {|e| e.abs}, colors[i]
+          }
+
+          sa.axis(:left) do |axis|
+            axis.alignment = :center
+            axis.color = "000000"
+            axis.font_size = 16
+            axis.range = 0..1
+          end
+
+          sa.axis :bottom, :alignment => :center, :color => "000000",
+          :font_size => 16, :range => [1, x_axis_length]
+
+          sa.write_to("public/images/portfolio/percent_contribution")
+
+          bc = GoogleChart::BarChart.new
+          bc.title = "Basis Point Change in Portfolio Volatility|per 100 Basis Point Change in Holding Weight|(Marginal Contribution to Volatility)"
+          bc.width = 400
+          bc.height = 400
+          bc.show_legend = true
+          bc.encoding = :extended
+
+          num_columns = marginal_contributions.size2
+          current_marginal_contributions = marginal_contributions.column(num_columns-1).to_a
+
+          bc.axis(:left) do |axis|
+            axis.color = "000000"
+            axis.font_size = 16
+            axis.range = 0..current_marginal_contributions.max*1000
+          end
+
+          tickers.size.times { |i|
+            bc.data "#{tickers[i]}", [current_marginal_contributions[i]*1000], colors[i]
+          }
+
+          bc.write_to("public/images/portfolio/marginal_contributions")
+
+          render :inline => "<%= image_tag(\"portfolio/percent_contribution.png\") %><br/><%= image_tag(\"portfolio/marginal_contributions.png\") %>"
+        end
+      }
+    end
+  end
+
   def return_monte_carlo
       respond_to do |wants|
         wants.js {
@@ -175,6 +252,16 @@ class PortfolioController < ApplicationController
             @chart.add_column('number', 'Holdings')
 
             sector_hash = Hash.new(0.0)
+            available_sectors = ['Basic Materials',
+                                 'Conglomerates',
+                                 'Consumer Goods',
+                                 'Financial',
+                                 'Health Care',
+                                 'Industrial Goods',
+                                 'Services',
+                                 'Technology',
+                                 'Utilities']
+
 
             tickers.each { |ticker|
               company = Company.first(:conditions => {:ticker => ticker.downcase})
@@ -183,7 +270,11 @@ class PortfolioController < ApplicationController
                 company.save!
               end
 
-              sector_hash[company.sector] += 1
+              if available_sectors.include?(company.sector)
+                sector_hash[company.sector] += 1
+              else
+                sector_hash['Other'] += 1
+              end
             }
 
             @chart.add_rows(sector_hash.size)
@@ -271,7 +362,7 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
-          window_size = 60
+          window_size = 125
           sampling_period = 10
           
           factors = Portfolio::Composition::ReturnAnalysis::SECTOR_PROXIES
@@ -305,13 +396,15 @@ class PortfolioController < ApplicationController
           sa.axis :bottom, :alignment => :center, :color => "000000",
           :font_size => 16, :range => [1, x_axis_length]
 
-          lc = GoogleChart::LineChart.new
+          unexplained = r_squared.map { |e| 1.0 - e }
+          lc = GoogleChart::StackedArea.new
           lc.width = 600
           lc.height = 150
           lc.title = "R-Squared"
 
-          lc.data "r-squared", r_squared, '000000', "1,0,0"
-
+          lc.data "Unexplained", unexplained, random_color
+          lc.data "Explained", r_squared, random_color
+          
           lc.encoding = :simple
           lc.show_legend = true
 
@@ -342,8 +435,11 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
+          window_size = 125
+          sampling_period = 10
+          
           factors = Portfolio::Composition::ReturnAnalysis::STYLE_PROXIES
-          return_values = Portfolio::Composition::ReturnAnalysis::composition_by_factors(sliced_state, factors)
+          return_values = Portfolio::Composition::ReturnAnalysis::composition_by_factors(sliced_state, factors, window_size, sampling_period)
           #get a return composition on the sliced-state
 
           betas = return_values[:betas]
@@ -405,12 +501,14 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
+          window_size = 125
+          sampling_period = 10
+
           factors = Portfolio::Composition::ReturnAnalysis::RATE_PROXIES
-          return_values = Portfolio::Composition::ReturnAnalysis::composition_by_factors(sliced_state, factors)
+          return_values = Portfolio::Composition::ReturnAnalysis::composition_by_factors(sliced_state, factors, window_size, sampling_period)
           #get a return composition on the sliced-state
 
           betas = return_values[:betas]
-          r_squared = return_values[:r2]
 
           points = []
           betas.size2.times { |i|
@@ -450,9 +548,6 @@ class PortfolioController < ApplicationController
             :chg => "33.33,33.33,1,5"
           }
           sc.write_to("public/images/portfolio/rate_and_credit_return_decomposition", extras)
-
-          #send_data(sa.fetch_image, :type => 'image/png',
-          #          :file_name => 'Return Composition', :disposition => 'inline')
           render :inline => "<%= image_tag(\"portfolio/rate_and_credit_return_decomposition.png\") %>"
         }
       end
@@ -468,7 +563,7 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
-          window_size = 60
+          window_size = 125
           sampling_period = 10
 
           factors = Portfolio::Composition::ReturnAnalysis::ASSET_PROXIES
@@ -502,12 +597,14 @@ class PortfolioController < ApplicationController
           sa.axis :bottom, :alignment => :center, :color => "000000",
           :font_size => 16, :range => [1,x_axis_length]
 
-          lc = GoogleChart::LineChart.new
+          unexplained = r_squared.map { |e| 1.0 - e }
+          lc = GoogleChart::StackedArea.new
           lc.width = 600
           lc.height = 150
           lc.title = "R-Squared"
 
-          lc.data "r-squared", r_squared, '000000', "1,0,0"
+          lc.data "Unexplained", unexplained, random_color
+          lc.data "Explained", r_squared, random_color
 
           lc.encoding = :simple
           lc.show_legend = true
@@ -534,7 +631,7 @@ class PortfolioController < ApplicationController
         wants.js {
 
           tickers = session[:portfolio].tickers.clone
-          tickers << 'SPY'
+          tickers << 'IWM'
 
           shares = session[:portfolio].shares.clone
           shares << 1
@@ -585,49 +682,81 @@ class PortfolioController < ApplicationController
           end
 
           render :inline => "<%= @chart.render('risk_vs_return_results') %>"
+        }
+      end
+    end
 
-=begin
+    def up_down_capture
+      respond_to do |wants|
+        wants.js {
+
+          tickers = session[:portfolio].tickers
+          state = Portfolio::State.new({:tickers => tickers,
+              :number_of_shares => session[:portfolio].shares})
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
+          sliced_state = state.slice(offset) # ~5 years
+
+          points = Portfolio::Risk::upside_downside_capture(sliced_state, ["IWM"], 60, 20) << [1.0,1.0]
+
+          total_points = points.size - 2
+          
+          max_x = points.map { |e| e[0] }.flatten.max
+          max_y = points.map { |e| e[1] }.flatten.max
+
+          min_x = points.map { |e| e[0] }.flatten.min
+          min_y = points.map { |e| e[1] }.flatten.min
+
+          # add line points (edges of 
+          points << [[min_x, min_y].max, [min_x, min_y].max] <<
+                    [[max_y, max_x].min, [max_y, max_x].min]
+
+          
+          colors = []
+          total_points.times { |i|
+            colors << greyscale_to_rgb(i / total_points.to_f)
+          }
+          colors.unshift("FF0000") #current time is red
+          colors.unshift("00FF00") #portfolio is green
+
+          colors.unshift("000000") #mask our final points
+          colors.unshift("000000")
+
+          # Scatter Plot
           sc = GoogleChart::ScatterPlot.new
-          sc.width = 400
-          sc.height = 400
-          sc.title = "Annualized Risk vs. Return"
-          sc.data "", risks_and_returns, colors
+          sc.width = 500
+          sc.height = 500
+          sc.title = "3-Month Up / Down Capture Analysis against Russell 2000 (measured monthly)"
+          sc.data "", points, colors.reverse
           sc.encoding = :extended
 
-
           #sc.data "Style Points", points, colors
-          returns = risks_and_returns.map { |e| e[1] }
-          risks = risks_and_returns.map { |e| e[0] }
+          
+          sc.max_x = max_x
+          sc.max_y = max_y
 
-          min_return = returns.flatten.min
-          max_return = returns.flatten.max
+          sc.min_x = min_x
+          sc.min_y = min_y
 
-          min_risk = risks.flatten.min
-          max_risk = risks.flatten.max
+          sizes = Array.new(points.size,1)
+          sizes[-3] = 0
+          sizes[-2] = 0 #mask our final points
+          sizes[-1] = 0
+          sc.point_sizes sizes
 
-          sc.max_x = max_risk
-          sc.max_y = max_return
+          sc.axis(:bottom, :range => min_x..max_x)
+          sc.axis(:left, :range => min_y..max_y)
 
-          sc.min_x = min_risk
-          sc.min_y = min_return
-
-          sc.point_sizes (Array.new(risks_and_returns.size, 1))
-
-          sc.axis(:bottom, :range => 0..max_risk)
-          sc.axis(:left, :range => min_return..max_return)
-
+          Rails.logger.info(points)
           #FIX: This seems like a rather ugly way to do this
           extras = {
-            :chg => "10,10,1,5",
-            :chdl => tickers[0...tickers.size-1].join('|') + "|S&P 500|Portfolio",
-            :chdlp => 'b'
+            :chm => "D,C6DEFF,1,#{points.size-2}:#{points.size-1}:,1,-1|s,00FF00,0,#{points.size-3},16"
           }
-          sc.write_to("public/images/portfolio/risk_versus_return", extras)
+
+          sc.write_to("public/images/portfolio/up_down_capture", extras)
 
           #send_data(sa.fetch_image, :type => 'image/png',
           #          :file_name => 'Return Composition', :disposition => 'inline')
-          render :inline => "<%= image_tag(\"portfolio/risk_versus_return.png\") %>"
-=end
+          render :inline => "<%= image_tag(\"portfolio/up_down_capture.png\") %>"
         }
       end
     end
