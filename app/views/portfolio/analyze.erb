@@ -64,7 +64,7 @@
   </tr>
 
   <tr>
-    <td>Contribution to Volatility</td>
+    <td>Contribution to Portfolio Volatility</td>
     <td align="center"><div id="volatlity_analysis_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
         :url => {:action => :volatility_analysis},
@@ -168,6 +168,17 @@
         :loading => "start_xhr('up_down_capture_results')",
         :complete => "stop_xhr('up_down_capture_results')",
         :update => 'up_down_capture_results' %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Eigen Value Decomposition</td>
+    <td align="center"><div id="eigen_value_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :eigen_value_decomposition},
+        :loading => "start_xhr('eigen_value_results')",
+        :complete => "stop_xhr('eigen_value_results')",
+        :update => 'eigen_value_results' %>
     </td>
   </tr>
 </table>

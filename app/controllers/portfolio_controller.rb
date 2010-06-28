@@ -25,8 +25,6 @@ class PortfolioController < ApplicationController
       @company = Company.new({:ticker => ticker})
       @company.save!
     end
-
-    @company.dividends
   end
 
   def volatility_analysis
@@ -74,7 +72,7 @@ class PortfolioController < ApplicationController
           end
 
           sa.axis :bottom, :alignment => :center, :color => "000000",
-          :font_size => 16, :range => [1, x_axis_length]
+            :font_size => 16, :range => [1, x_axis_length]
 
           sa.write_to("public/images/portfolio/percent_contribution")
 
@@ -83,7 +81,7 @@ class PortfolioController < ApplicationController
           bc.width = 400
           bc.height = 400
           bc.show_legend = true
-          bc.encoding = :extended
+          bc.encoding = :text
 
           num_columns = marginal_contributions.size2
           current_marginal_contributions = marginal_contributions.column(num_columns-1).to_a
@@ -93,6 +91,9 @@ class PortfolioController < ApplicationController
             axis.font_size = 16
             axis.range = 0..current_marginal_contributions.max*1000
           end
+
+          bc.min = 0
+          bc.max = current_marginal_contributions.max*1000
 
           tickers.size.times { |i|
             bc.data "#{tickers[i]}", [current_marginal_contributions[i]*1000], colors[i]
@@ -137,7 +138,7 @@ class PortfolioController < ApplicationController
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
-            lc.title = "#{x_series_size} Day Projection (Monte Carlo Simulation with n = 10,000)"
+            lc.title = "#{x_series_size} Day Projection|(Monte Carlo Simulation with n = 10,000)"
 
             lc.data "1 Pos. Std. Devs", one_std_above, 'BCED91', "1,6,3"
             lc.data "1 Neg. Std. Devs", one_std_below, 'EEB4B4', "1,6,3"
@@ -207,7 +208,7 @@ class PortfolioController < ApplicationController
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
-            lc.title = "4 Quarter Income Projection (Monte Carlo Simulation with n = 2500)"
+            lc.title = "4 Quarter Income Projection|(Monte Carlo Simulation with n = 2500)"
 
             
             lc.data "1 Pos. Std. Devs", one_std_above, 'BCED91', "1,6,3"
@@ -311,26 +312,6 @@ class PortfolioController < ApplicationController
 
             days = params[:days].to_i
             composite_risk = Portfolio::Risk::ValueAtRisk.composite_risk(sliced_state, days)
-
-=begin
-          GoogleChart::PieChart.new do |pc|
-            pc.height = 400
-            pc.width = 600
-            pc.title = "Risk Decomposition"
-            #pc.show_legend = true
-
-            0.upto(tickers.size-1) { |i|
-              value = (composite_risk[i] * 10000).round.to_f / 10000
-              pc.data "#{tickers[i]}", 
-                       composite_risk[i].abs,
-                       random_color
-            }
-            Rails.logger.info(pc.to_url({:chdlp => 'b'}))
-            
-            pc.write_to("public/images/portfolio/risk-decomposition", {:chdlp => 'b'})
-            render :inline => "<%= image_tag(\"portfolio/risk-decomposition.png\") %>"
-          end
-=end
 
             @chart = GoogleVisualr::PieChart.new
             @chart.add_column('string', 'Ticker')
@@ -696,7 +677,9 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
-          points = Portfolio::Risk::upside_downside_capture(sliced_state, ["IWM"], 60, 20) << [1.0,1.0]
+          points = Portfolio::Risk::upside_downside_capture(sliced_state, 
+            {:tikers => ["IWM"], :number_of_shares => [1]}, 60, 20) << [1.0,1.0]
+  
 
           total_points = points.size - 2
           
@@ -706,7 +689,7 @@ class PortfolioController < ApplicationController
           min_x = points.map { |e| e[0] }.flatten.min
           min_y = points.map { |e| e[1] }.flatten.min
 
-          # add line points (edges of 
+          # add line points (edges of bounding box)
           points << [[min_x, min_y].max, [min_x, min_y].max] <<
                     [[max_y, max_x].min, [max_y, max_x].min]
 
@@ -725,7 +708,7 @@ class PortfolioController < ApplicationController
           sc = GoogleChart::ScatterPlot.new
           sc.width = 500
           sc.height = 500
-          sc.title = "3-Month Up / Down Capture Analysis against Russell 2000 (measured monthly)"
+          sc.title = "3-Month Up / Down Capture Analysis|against Russell 2000 (measured monthly)"
           sc.data "", points, colors.reverse
           sc.encoding = :extended
 
@@ -757,6 +740,91 @@ class PortfolioController < ApplicationController
           #send_data(sa.fetch_image, :type => 'image/png',
           #          :file_name => 'Return Composition', :disposition => 'inline')
           render :inline => "<%= image_tag(\"portfolio/up_down_capture.png\") %>"
+        }
+      end
+    end
+
+    def eigen_value_decomposition
+      respond_to do |wants|
+        wants.js {
+          if session[:portfolio].nil?
+            render :text => "Please upload portfolio first"
+          else
+            tickers = session[:portfolio].tickers
+            state = Portfolio::State.new({:tickers => tickers,
+                :number_of_shares => session[:portfolio].shares})
+            offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
+            portfolio_state = state.slice(offset) # ~5 years
+
+            eigen_values, percent_variance, eigen_vectors =
+                  Portfolio::Composition::ReturnAnalysis::pca(portfolio_state)
+
+            Rails.logger.info(eigen_values)
+            Rails.logger.info(percent_variance)
+            Rails.logger.info(eigen_vectors)
+
+            colors = random_colors(eigen_values.size)
+
+            lc = GoogleChart::LineChart.new
+            lc.width = 600
+            lc.height = 300
+
+            total_variance = 0
+            i = 0
+            while total_variance < 0.95 && i <= 4
+              lc.data "Eigen Vector #{i+1}", eigen_vectors.column(i).to_a, colors[i]
+              total_variance = total_variance + percent_variance[i]
+              i = i + 1
+            end
+
+            total_variance = (total_variance * 10000).to_i / 10000.0
+            lc.title = "Principal Component Analysis|(#{total_variance*100}% of variance)"
+
+            lc.encoding = :extended
+            lc.show_legend = true
+
+            minimum = eigen_vectors.to_a.flatten.min.floor
+            maximum = eigen_vectors.to_a.flatten.max.ceil
+
+            lc.axis :left, :range => [minimum, maximum],
+              :color => '000000', :font_size => 16, :alignment => :center
+
+            lc.axis :bottom, :range => [1, tickers.size],
+              :color => '000000', :font_size => 8, :alignment => :center,
+              :labels => tickers
+
+            extras = {
+              :chg => "10,10,1,5"
+            }
+
+            lc.write_to("public/images/portfolio/eigen_vector_decomp", {:chdlp => 'b'})
+
+            bc = GoogleChart::BarChart.new
+            bc.title = "Percent Variance Contribution"
+            bc.width = 500
+            bc.height = 500
+            bc.show_legend = true
+            bc.encoding = :text
+
+            bc.min = 0
+            bc.max = percent_variance.max*100
+
+            bc.axis(:left) do |axis|
+              axis.color = "000000"
+              axis.font_size = 16
+              axis.range = 0..percent_variance.max*100
+            end
+
+            tickers.size.times { |i|
+              Rails.logger.info(percent_variance[i])
+              bc.data "Eigen Value #{i+1}", [percent_variance[i]*100], colors[i]
+            }
+
+            Rails.logger.info(bc.to_url)
+            bc.write_to("public/images/portfolio/eigen_value_decomp", {:chdlp => 'b'})
+
+            render :inline => "<%= image_tag(\"portfolio/eigen_vector_decomp.png\") %><br/><%= image_tag(\"portfolio/eigen_value_decomp.png\") %>"
+          end
         }
       end
     end

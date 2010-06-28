@@ -44,8 +44,7 @@ module Portfolio
 
       raise "Must define both window and step" if window.nil? ^ step.nil?
       
-      benchmark_state = Portfolio::State.new({:tickers => benchmark,
-                                            :number_of_shares => [1]})
+      benchmark_state = Portfolio::State.new(benchmark)
       dates = portfolio_state.dates & benchmark_state.dates
 
       shared_portfolio_state = portfolio_state.select_dates(dates)
@@ -75,7 +74,7 @@ module Portfolio
           end
         }
 
-        capture_ratio = [(1.0 - portfolio_down) / (1.0 - benchmark_down),
+        capture_ratio = [(portfolio_down - 1.0) / (benchmark_down - 1.0),
                               (portfolio_up - 1.0) / (benchmark_up - 1.0)]
         return [capture_ratio]
         
@@ -106,7 +105,7 @@ module Portfolio
             end
           }
 
-          capture_ratios << [(1.0 - portfolio_down) / (1.0 - benchmark_down),
+          capture_ratios << [(portfolio_down - 1.0) / (benchmark_down - 1.0),
                               (portfolio_up - 1.0) / (benchmark_up - 1.0)]
         }
         return capture_ratios
