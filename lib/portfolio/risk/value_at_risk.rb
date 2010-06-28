@@ -67,33 +67,54 @@ module Portfolio
         # log-returns are row oriented
         returns = portfolio_state.log_returns
         n = returns.size1
+
+        # now compute the marginal VaRs
+        Status.info('Computing marginal VaRs')
+
+        total_holdings = GSL::Vector.alloc(n)
+        last_date = portfolio_state.dates[-1]
+        n.times { |i|
+          total_holdings[i] = portfolio_state.number_of_shares[i] *
+            portfolio_state.time_series[portfolio_state.tickers[i]][last_date]
+        }
         
+        total_portfolio_value = portfolio_state.current_portfolio_value
+        variance = portfolio_state.covariance_matrix * total_holdings.col
+
+        portfolio_variance = total_holdings * variance
+        beta = total_portfolio_value * variance / portfolio_variance
+
+        Status.info("Computing Portfolio VaR")
+        portfolio_var = cornish_fisher(portfolio_state.to_log_returns, days)[:var]
+        portfolio_var = (Math.exp(portfolio_var)-1.0)*total_portfolio_value
+
         vars = GSL::Vector.alloc(n)
         0.upto(n-1) { |i|
-          Status.info("Computing Cornish-Fisher VaRs (#{i+1}/#{n})")
+          Status.info("Computing Holding VaRs (#{i+1}/#{n})")
           value_at_risk = cornish_fisher(returns.row(i), days)
           #Rails.logger.info(value_at_risk)
           vars[i] =  value_at_risk[:var]
         }
-
-        weights = portfolio_state.weights
+        vars = vars.map { |e| Math.exp(e)-1.0 } * total_holdings
 
         # see how much each var contributes to the overall portfolio
         # we use the covariance matrix to incorporate the overlap
         Status.info('Computing Risk Composition')
-        covariance_matrix = portfolio_state.covariance_matrix
+        covariance_matrix = portfolio_state.covariance_matrix.map { |e| Math.exp(e)-1 }
         risks = GSL::Vector.alloc(n)
-        0.upto(n-1) { |i|
-          risks[i] = (vars[i]**2)*covariance_matrix[i,i]
-          0.upto(n-1) { |j|
-            risks[i] += vars[i] * vars[j] * 
-                        covariance_matrix[i,j] unless i == j
+        n.times { |i|
+          risks[i] = vars[i]
+          n.times { |j|
+            risks[i] += vars[j] * covariance_matrix[i,j] unless i == j
           }
         }
-
-        weighted_risks = risks * weights
         
-        return weighted_risks / weighted_risks.abs.sum
+        return {
+          :portfolio_var => portfolio_var,
+          :individual_vars => vars,
+          :proportion_of_var => risks / risks.abs.sum,
+          :marginal_vars => beta * portfolio_var / total_portfolio_value
+        }
       end
     end
   end

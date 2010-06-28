@@ -13,6 +13,12 @@
     document.getElementById('status').style.visibility = 'hidden';
     document.getElementById(v).style.visibility = 'visible';
   }
+  function visible_specific(v) {
+    document.getElementById(v).style.visibility = 'visible';
+  }
+  function hidden_specific(v) {
+    document.getElementById(v).style.visibility = 'hidden';
+  }
 </script>
 
 <%= periodically_call_remote(:update => "status", :frequency => 1,
@@ -75,14 +81,15 @@
   </tr>
   
   <tr>
-    <td>20-Day VaR Decomposition</td>
-    <td align="center"><div id="20_day_risk_results" style="visibility:hidden">
-      </div>
+    <td>Value-at-Risk Decomposition</td>
+    <td align="center">
+      <div id="var_decomposition" style="visibility:hidden"></div>
+      <div id="20_day_risk_results"></div>
       <%= link_to_remote "Run",
         :url => {:action => :risk_decomposition, :days => 20},
-        :loading => "start_xhr('20_day_risk_results')",
-        :complete => "stop_xhr('20_day_risk_results')",
-        :update => '20_day_risk_results' %>
+        :loading => "start_xhr('var_decomposition'); hidden_specific('20_day_risk_results')",
+        :complete => "stop_xhr('var_decomposition'); visible_specific('20_day_risk_results')",
+        :update => 'var_decomposition' %>
     </td>
   </tr>
   <tr>

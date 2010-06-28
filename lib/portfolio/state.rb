@@ -233,7 +233,11 @@ module Portfolio
     def return_monte_carlo(periods_forward = 250, n = 10000, block_size = 10)
       Status.info("Performing return monte-carlo simulation on portfolio")
       return monte_carlo(self.to_log_returns, compute_current_portfolio_value,
-                          periods_forward, n, block_size, 0.9995)
+                          periods_forward, n, block_size, 0.9999)
+    end
+
+    def current_portfolio_value
+      compute_current_portfolio_value
     end
 
     def portfolio_value_over_time

@@ -304,7 +304,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            tickers = session[:portfolio].tickers
+            tickers = session[:portfolio].tickers.sort
             state = Portfolio::State.new({:tickers => tickers,
                 :number_of_shares => session[:portfolio].shares})
             offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -313,21 +313,60 @@ class PortfolioController < ApplicationController
             days = params[:days].to_i
             composite_risk = Portfolio::Risk::ValueAtRisk.composite_risk(sliced_state, days)
 
-            @chart = GoogleVisualr::PieChart.new
-            @chart.add_column('string', 'Ticker')
-            @chart.add_column('number', 'Value at Risk Contribution')
-            @chart.add_rows(composite_risk.size)
-            composite_risk.size.times { |i|
-              @chart.set_value(i, 0, tickers[i])
-              @chart.set_value(i, 1, composite_risk[i])
-            }
-            options = { :width => 600, :height => 400,
-              :title => "#{days} Day Risk Decomposition", :is3D => true }
-            options.each_pair { | key, value |
-              @chart.send "#{key}=", value
+            portfolio_var = composite_risk[:portfolio_var]
+            individual_vars = composite_risk[:individual_vars]
+            marginal_vars = composite_risk[:marginal_vars]
+            component_var_proportion = composite_risk[:proportion_of_var]
+
+            colors = random_colors(tickers.size)
+
+            bc = GoogleChart::BarChart.new
+            bc.title = "Individual Value-at-Risk|(Measured in Dollars)"
+            bc.width = 500
+            bc.height = 350
+            bc.show_legend = true
+            bc.encoding = :text
+
+            bc.min = 0
+            bc.max = individual_vars.max
+
+            bc.axis(:left) do |axis|
+              axis.color = "000000"
+              axis.font_size = 16
+              axis.range = 0..individual_vars.max
+            end
+
+            tickers.size.times { |i|
+              bc.data "#{tickers[i]}", [individual_vars[i]], colors[i]
             }
 
-            render :inline => "<%= @chart.render(\"#{days}_day_risk_results\") %>"
+            bc.write_to("public/images/portfolio/individual_vars", {:chdlp => 'b'})
+
+            bc = GoogleChart::BarChart.new
+            bc.title = "Marginal Value-at-Risk (in $)"
+            bc.width = 500
+            bc.height = 350
+            bc.show_legend = true
+            bc.encoding = :text
+
+            bc.min = 0
+            bc.max = marginal_vars.max
+
+            bc.axis(:left) do |axis|
+              axis.color = "000000"
+              axis.font_size = 16
+              axis.range = 0..marginal_vars.max
+            end
+
+            tickers.size.times { |i|
+              bc.data "#{tickers[i]}", [marginal_vars[i]], colors[i]
+            }
+
+            bc.write_to("public/images/portfolio/marginal_vars", {:chdlp => 'b'})
+
+            render :inline => "<%= \"Portfolio VaR: #{portfolio_var}\" %><br/>
+                            <%= image_tag(\"portfolio/individual_vars.png\") %><br/>
+                            <%= image_tag(\"portfolio/marginal_vars.png\") %><br/>"
           end
         }
       end
@@ -337,7 +376,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          tickers = session[:portfolio].tickers
+          tickers = session[:portfolio].tickers.sort
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -410,7 +449,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          tickers = session[:portfolio].tickers
+          tickers = session[:portfolio].tickers.sort
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -476,7 +515,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          tickers = session[:portfolio].tickers
+          tickers = session[:portfolio].tickers.sort
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -508,7 +547,7 @@ class PortfolioController < ApplicationController
           sc = GoogleChart::ScatterPlot.new
           sc.width = 400
           sc.height = 400
-          sc.title = "Rate & Credit Sensitivity"
+          sc.title = "Term & Credit Sensitivity"
           sc.data "", points, colors.reverse
           sc.encoding = :extended
 
@@ -538,7 +577,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          tickers = session[:portfolio].tickers
+          tickers = session[:portfolio].tickers.sort
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -611,7 +650,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          tickers = session[:portfolio].tickers.clone
+          tickers = session[:portfolio].tickers.sort.clone
           tickers << 'IWM'
 
           shares = session[:portfolio].shares.clone
@@ -629,7 +668,6 @@ class PortfolioController < ApplicationController
           }
 
           risks_and_returns.map! { |e| [e[0]*100, e[1]*100] }
-          Rails.logger.info(risks_and_returns)
 
           tickers << "Portfolio"
           # Scatter Plot
@@ -671,7 +709,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          tickers = session[:portfolio].tickers
+          tickers = session[:portfolio].tickers.sort
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => session[:portfolio].shares})
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -729,7 +767,6 @@ class PortfolioController < ApplicationController
           sc.axis(:bottom, :range => min_x..max_x)
           sc.axis(:left, :range => min_y..max_y)
 
-          Rails.logger.info(points)
           #FIX: This seems like a rather ugly way to do this
           extras = {
             :chm => "D,C6DEFF,1,#{points.size-2}:#{points.size-1}:,1,-1|s,00FF00,0,#{points.size-3},16"
@@ -750,7 +787,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            tickers = session[:portfolio].tickers
+            tickers = session[:portfolio].tickers.sort
             state = Portfolio::State.new({:tickers => tickers,
                 :number_of_shares => session[:portfolio].shares})
             offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -758,10 +795,6 @@ class PortfolioController < ApplicationController
 
             eigen_values, percent_variance, eigen_vectors =
                   Portfolio::Composition::ReturnAnalysis::pca(portfolio_state)
-
-            Rails.logger.info(eigen_values)
-            Rails.logger.info(percent_variance)
-            Rails.logger.info(eigen_vectors)
 
             colors = random_colors(eigen_values.size)
 
@@ -800,9 +833,9 @@ class PortfolioController < ApplicationController
             lc.write_to("public/images/portfolio/eigen_vector_decomp", {:chdlp => 'b'})
 
             bc = GoogleChart::BarChart.new
-            bc.title = "Percent Variance Contribution"
+            bc.title = "Contribution to Variance (percent)"
             bc.width = 500
-            bc.height = 500
+            bc.height = 350
             bc.show_legend = true
             bc.encoding = :text
 
@@ -816,11 +849,9 @@ class PortfolioController < ApplicationController
             end
 
             tickers.size.times { |i|
-              Rails.logger.info(percent_variance[i])
               bc.data "Eigen Value #{i+1}", [percent_variance[i]*100], colors[i]
             }
 
-            Rails.logger.info(bc.to_url)
             bc.write_to("public/images/portfolio/eigen_value_decomp", {:chdlp => 'b'})
 
             render :inline => "<%= image_tag(\"portfolio/eigen_vector_decomp.png\") %><br/><%= image_tag(\"portfolio/eigen_value_decomp.png\") %>"
