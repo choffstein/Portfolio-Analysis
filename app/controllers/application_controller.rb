@@ -21,9 +21,9 @@ class ApplicationController < ActionController::Base
     
     n.times { |i|
       r, g, b = hsv_to_rgb(step*i + rand*step/2, 0.5, 0.9)
-      r = (r*256).floor
-      g = (g*256).floor
-      b = (b*256).floor
+      r = (r*255).floor
+      g = (g*255).floor
+      b = (b*255).floor
       s = rgb_to_string(r,g,b)
       colors << s
     }
@@ -55,6 +55,14 @@ class ApplicationController < ActionController::Base
       as_hex = "0" + as_hex
     end
     return (as_hex + as_hex + as_hex)
+  end
+
+  def hsv_to_rgb_string(h,s,v)
+    r,g,b = hsv_to_rgb(h,s,v)
+    r = (r*255).floor
+    g = (g*255).floor
+    b = (b*255).floor
+    return rgb_to_string(r,g,b)
   end
 
   private

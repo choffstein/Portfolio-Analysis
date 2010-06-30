@@ -59,6 +59,16 @@
       </div></td>
   </tr>
   <tr>
+    <td>Correlation Analysis</td>
+    <td align="center"><div id="correlation_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :correlation_analysis},
+        :loading => "start_xhr('correlation_results')",
+        :complete => "stop_xhr('correlation_results')",
+        :update => 'correlation_results' %>
+    </td>
+  </tr>
+  <tr>
     <td>Risk vs Return Breakdown</td>
     <td align="center"><div id="risk_vs_return_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
@@ -179,7 +189,7 @@
   </tr>
 
   <tr>
-    <td>Eigen Value Decomposition</td>
+    <td>Portfolio Dimensionality</td>
     <td align="center"><div id="eigen_value_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
         :url => {:action => :eigen_value_decomposition},

@@ -133,7 +133,7 @@ module Portfolio
 
       def self.pca(portfolio_state)
         #compute the eigen-vals and eigen-vects
-        eigen_values, eigen_vectors = portfolio_state.covariance_matrix.eigen_symmv
+        eigen_values, eigen_vectors = portfolio_state.sample_correlation_matrix.eigen_symmv
         percent_variance = eigen_values.abs / eigen_values.abs.sum
 
         return [eigen_values, percent_variance, eigen_vectors]

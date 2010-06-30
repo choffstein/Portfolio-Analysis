@@ -51,12 +51,22 @@ module Portfolio
              (1.0/24.0)*(z**3 - 3.0*z)*kurtosis -
              (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(skewness**2)
         
-        var = 1 - Math.exp(mean - za * Math.sqrt(variance))
+        var = 1.0 - Math.exp(mean - za * Math.sqrt(variance))
 
-        
-        cvar = 1 - Math.exp(mean - Math.sqrt(variance) *
-                                Standard_Normal_Distribution.pdf(za) /
-                                Standard_Normal_Distribution.cdf(za))
+        cvars = []
+        n.times { |i|
+          row = series.row(i)
+          cumulative = row.cumsum
+          m = cumulative.size
+          differences = cumulative.get(days, m-days) - cumulative.get(0, m-days)
+
+          pct_differences = differences.map { |e| 1.0 - Math.exp(e) }
+          cvar_pct_differences = pct_differences.to_a.select { |e| e > var }
+          local_cvar = cvar_pct_differences.inject(0.0) { |s,v| s + v } / cvar_pct_differences.size
+          cvars << local_cvar unless local_cvar.nan?
+        }
+
+        cvar = cvars.inject(0.0) { |s,v| s + v } / cvars.size
 
         return {:var => var, :cvar => cvar}
       end
@@ -85,17 +95,20 @@ module Portfolio
         beta = total_portfolio_value * variance / portfolio_variance
 
         Status.info("Computing Portfolio VaR")
-        portfolio_var = cornish_fisher(portfolio_state.to_log_returns, days)[:var]
-        portfolio_var = (Math.exp(portfolio_var)-1.0)*total_portfolio_value
+        portfolio_vars = cornish_fisher(portfolio_state.to_log_returns, days)
+        portfolio_var = portfolio_vars[:var] * total_portfolio_value
+        portfolio_cvar = portfolio_vars[:cvar] * total_portfolio_value
 
         vars = GSL::Vector.alloc(n)
+        cvars = GSL::Vector.alloc(n)
         0.upto(n-1) { |i|
-          Status.info("Computing Holding VaRs (#{i+1}/#{n})")
+          Status.info("Computing VaR for #{portfolio_state.tickers[i]} (#{i+1}/#{n})")
           value_at_risk = cornish_fisher(returns.row(i), days)
-          #Rails.logger.info(value_at_risk)
           vars[i] =  value_at_risk[:var]
+          cvars[i] = value_at_risk[:cvar]
         }
-        vars = vars.map { |e| Math.exp(e)-1.0 } * total_holdings
+        vars = vars * total_holdings
+        cvars = cvars * total_holdings
 
         # see how much each var contributes to the overall portfolio
         # we use the covariance matrix to incorporate the overlap
@@ -111,7 +124,9 @@ module Portfolio
         
         return {
           :portfolio_var => portfolio_var,
+          :portfolio_cvar => portfolio_cvar,
           :individual_vars => vars,
+          :individual_cvars => cvars,
           :proportion_of_var => risks / risks.abs.sum,
           :marginal_vars => beta * portfolio_var / total_portfolio_value
         }
