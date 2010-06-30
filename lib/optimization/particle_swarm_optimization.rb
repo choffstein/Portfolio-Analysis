@@ -103,7 +103,7 @@ module Optimization
     DEFAULT_OPTIONS = { 
       :minimum_iterations => 250,
       :maximum_iterations => 10000,
-      :maximum_stuck => 100,
+      :maximum_stuck => 250,
       :absolute_tolerance => -Infinity
     }
     def self.optimize_over(population_size, feature_dimension, feature_limits,

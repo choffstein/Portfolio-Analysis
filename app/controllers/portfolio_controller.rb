@@ -41,12 +41,12 @@ class PortfolioController < ApplicationController
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => shares})
 
-          s = "<table width=#{tickers.size*10} height=#{tickers.size*10} border=0>"
-          s += "<tr><td></td>"
+          inline_renderable = "<table width=#{tickers.size*10} height=#{tickers.size*10} border=0>"
+          inline_renderable += "<tr><td></td>"
           tickers.each { |t|
-            s += "<td><b>#{t.upcase}</b></td>"
+            inline_renderable += "<td><b>#{t.upcase}</b></td>"
           }
-          s += "<tr>"
+          inline_renderable += "<tr>"
 
           correlation_matrix = state.sample_correlation_matrix
 
@@ -61,23 +61,23 @@ class PortfolioController < ApplicationController
 
           tickers.size.times { |i|
             r = correlation_matrix.row(i)
-            s += "<tr>"
-            s += "<td><b>#{tickers[i].upcase}</b></td>"
+            inline_renderable += "<tr>"
+            inline_renderable += "<td><b>#{tickers[i].upcase}</b></td>"
             r.size.times { |j|
               clamped = (r[j] * 100).to_i / 100.0
 
               # generate the appropriate color
               color = hsv_to_rgb_string(0, clamped.abs**2, 1.0)
 
-              s += "<td bgcolor=\"#{color}\">#{clamped}</td>"
+              inline_renderable += "<td bgcolor=\"#{color}\">#{clamped}</td>"
             }
-            s += "</tr>"
+            inline_renderable += "</tr>"
           }
 
-          s += "</table>"
-          s += "<br/><b>IPC:</b> #{ipc}"
-          s += "<br/><b>Concentration Coefficient:</b> #{cc}"
-          render :inline => s
+          inline_renderable += "</table>"
+          inline_renderable += "<br/><b>IPC:</b> #{100*(1.0 - ipc)/2.0}%"
+          inline_renderable += "<br/><b>Concentration Coefficient:</b> #{cc}"
+          render :inline => inline_renderable
         end
       }
     end
@@ -823,7 +823,7 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
-          points = Portfolio::Risk::upside_downside_capture(sliced_state, 
+          points = Portfolio::Risk::upside_downside_capture(sliced_state,
             {:tikers => ["IWM"], :number_of_shares => [1]}, 60, 20) << [1.0,1.0]
   
 
@@ -920,7 +920,6 @@ class PortfolioController < ApplicationController
             lc.width = 600
             lc.height = 300
 
-
             #identify which dimension to associate a holding with
             num_dimensions = eigen_vectors.size2
             identified_dimension = Array.new(tickers.size)
@@ -928,14 +927,12 @@ class PortfolioController < ApplicationController
             num_dimensions.times { |i|
               if percent_variance[i] > 0.025
                 vector = eigen_vectors.column(i)
-                minimum = vector.min
-                maximum = vector.max
                 mean = vector.mean
 
                 vector.size.times { |j|
-                  dimension_score =  [vector[j] - mean,  vector[j]].max *
-                                                              percent_variance[i]
-
+                  dimension_score =  ([vector[j] - mean, vector[j]].max *
+                                                              percent_variance[i]).abs
+                  
                   if current_max[j] < dimension_score
                     current_max[j] = dimension_score
                     identified_dimension[j] = i
@@ -943,6 +940,8 @@ class PortfolioController < ApplicationController
                 }
               end
             }
+
+            Rails.logger.info(identified_dimension)
 
             unique_dimensions = identified_dimension.uniq.sort
             
@@ -999,25 +998,25 @@ class PortfolioController < ApplicationController
 
             bc.write_to("public/images/portfolio/eigen_value_decomp", {:chdlp => 'b'})
 
-            s = "<%= image_tag(\"portfolio/eigen_vector_decomp.png\") %><br/><%= image_tag(\"portfolio/eigen_value_decomp.png\") %>"
-            s += "<br/>"
+            inline_renderable = "<%= image_tag(\"portfolio/eigen_vector_decomp.png\") %><br/><%= image_tag(\"portfolio/eigen_value_decomp.png\") %>"
+            inline_renderable += "<br/>"
 
             groups = tickers.zip(identified_dimension).group_by { |e| e[1] }
 
             groups.keys.sort.each { |group_id|
               group = groups[group_id]
               sorted_group = group.sort { |a,b| a[0] <=> b[0] }
-              s += "<b>Group #{group_id+1}</b>: "
+              inline_renderable += "<b>Group #{group_id+1}</b>: "
               sorted_group.each { |holding|
-                s += "#{holding[0]} "
+                inline_renderable += "#{holding[0]} "
               }
-              s += "<br/>"
+              inline_renderable += "<br/>"
             }
 
             # now that we have reduced dimensionality, find the points in n-space
             # based on their correlation
             n_holdings = tickers.size
-            n_dimensions = [groups.size, 7].min #max out at 7 dimensions
+            n_dimensions = [groups.size, 7].min #max 7 dimensions
 
             number_of_dimensions = n_holdings * n_dimensions
             feature_limits = []
@@ -1064,24 +1063,61 @@ class PortfolioController < ApplicationController
             }
 
             vector_scores = GSL::Vector.alloc(tickers.size)
-            vector_scores.map! { |e| rand * 25 }
+            #vector_scores.set_all(1.0)
+            vector_scores.map! { |e| rand }
             
             data_points = []
-            (positions.size1-1).times { |i|
-              data_points << (positions.row(i) * vector_scores[i]).to_a
+            (positions.size1).times { |i|
+              data_points << (positions.row(i) * vector_scores[i])
             }
-            data_points << GSL::Vector.alloc(n_dimensions).set_all(0.0).to_a
 
-            indices = Convex::qhull(data_points.size, n_dimensions, data_points).uniq
+            hull_summary = Convex::qhull(data_points.size, n_dimensions, data_points)
+            indices = hull_summary[:indices].uniq
+            faces = hull_summary[:faces]
 
-            s += "<br/><b>Include:</b><br/> "
+            inline_renderable += "<br/><b>Include:</b><br/> "
             indices.each { |index|
-              s += "#{tickers[index]} "
+              inline_renderable += "#{tickers[index]} "
+            }
+            inline_renderable += "<br/>"
+
+            center_of_gravity = GSL::Vector.alloc(n_dimensions).set_all(0.0)
+            data_points.each { |dp|
+              center_of_gravity = center_of_gravity + dp
+            }
+            center_of_gravity = center_of_gravity / data_points.size
+
+            total_inner_surface_area = 0
+            contributed_inner_surface_area = Hash.new(0.0)
+            faces.each { |face|
+              #given pairs of two points in the face,
+              #find the area of the triangle with third point
+              #center of gravity
+              face.size.times { |i|
+                j = (i + 1) == face.size ? -1 : i+1
+
+                p1 = face[i]
+                p2 = face[j]
+
+                a = (data_points[p1] - data_points[p2]).nrm2
+                b = (data_points[p1] - center_of_gravity).nrm2
+                c = (data_points[p2] - center_of_gravity).nrm2
+
+                # area of triangle given three sides
+                s = (a+b+c)/2.0
+                area = Math.sqrt(s*(s-a)*(s-b)*(s-c))
+
+                total_inner_surface_area += area
+                contributed_inner_surface_area[p1] += area/2.0
+                contributed_inner_surface_area[p2] += area/2.0
+              }
             }
 
-            select_tickers = indices.map { |i| tickers[i] }
-            select_shares = indices.map { |i| shares[i] }
-            select_scores = indices.map { |i| vector_scores[i] }
+            weights = GSL::Vector[*indices.map { |i| contributed_inner_surface_area[i] /
+                                                        total_inner_surface_area }]
+
+            select_tickers = indices.map { |e| tickers[e] }
+            select_shares = indices.map { |e| shares[e] }
 
             select_state = Portfolio::State.new({:tickers => select_tickers,
               :number_of_shares => select_shares})
@@ -1089,48 +1125,15 @@ class PortfolioController < ApplicationController
             offset = (select_state.dates.size - 1250) < 0 ? 0 : (select_state.dates.size - 1250)
             select_portfolio_state = select_state.slice(offset) # ~5 years
 
-            feature_limits = []
-            select_tickers.size.times { |i|
-              feature_limits << [0, 1]
+            ipc = weights * select_portfolio_state.sample_correlation_matrix * weights.col
+            ipc = ipc - weights * weights.col
+
+            select_tickers.zip(weights.to_a) { |t,w|
+              inline_renderable += "#{t}: #{w}<br/>"
             }
+            inline_renderable += "<br/><b>IPC:</b> #{100*(1.0 - ipc)/2.0}%<br/>"
 
-            fitness_function = Proc.new { |weights|
-              # get the weights as a proportion to the whole
-              pweights = weights / weights.sum
-
-              ipc = (pweights * select_portfolio_state.sample_correlation_matrix * pweights.col - pweights * pweights.col)
-
-              pscore = 0
-              pweights.size.times { |i|
-                pscore = pscore + pweights[i] * select_scores[i]
-              }
-
-              # since we want to minimize ipc and maximize pscore,
-              # but we are running a minimization algorithm, we put pscore on the
-              # bottom and ipc on the top
-
-              #since ipc is in [-1, 1], we have to add 1 to it, so that
-              # a score of -1 remains stronger than a -0.0001 when divided
-              # by identical pscores.
-              (ipc + 1.0) / pscore
-            }
-
-            fitness, features = Optimization::ParticleSwarmOptimization::optimize_over(
-                    10*select_tickers.size,
-                    select_tickers.size, feature_limits,
-                    1, 1, 1, 0.1, 0.05, fitness_function,
-                    {:maximum_stuck => 500})
-
-            features = features / features.sum
-            s += "<br/><b>IPC:</b> #{features * select_portfolio_state.sample_correlation_matrix * features.col - features * features.col}<br/>"
-            s += "<b>CC:</b> #{1.0 / (features * features.col)}<br/>"
-
-            s += "<b>Weights</b><br/>"
-            select_tickers.size.times { |i|
-              s += "#{select_tickers[i]}: #{features[i]}<br/>"
-            }
-            
-            render :inline => s
+            render :inline => inline_renderable
           end
         }
       end
