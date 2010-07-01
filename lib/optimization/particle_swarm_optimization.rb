@@ -108,9 +108,10 @@ module Optimization
     }
     def self.optimize_over(population_size, feature_dimension, feature_limits,
         inertia, cognitive, social, teleportation,
-        regeneration, fitness_function, options={})
+        regeneration, options={})
 
       raise "Feature limit definition must be equal to feature size definition" unless feature_dimension == feature_limits.size
+      raise "Must provide fitness-function as block" unless block_given?
 
       options = Utility::Options::set_default_options(options, DEFAULT_OPTIONS)
 
@@ -129,7 +130,7 @@ module Optimization
       begin
         # find the fitness of each fly and see if it is a local best
         @population.each { |fly|
-          fly.current_fitness = fitness_function.call(fly.position.clone)
+          fly.current_fitness = yield fly.position.clone
         }
 
         # find the best fitness of the current swarm

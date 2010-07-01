@@ -34,7 +34,7 @@ class PortfolioController < ApplicationController
           render :text => "Please upload portfolio first"
         else
 
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           
@@ -89,7 +89,7 @@ class PortfolioController < ApplicationController
         if session[:portfolio].nil?
           render :text => "Please upload portfolio first"
         else
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           state = Portfolio::State.new({:tickers => tickers,
@@ -171,7 +171,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
             tickers = holdings.map { |e| e[0] }
             shares = holdings.map { |e| e[1] }
             state = Portfolio::State.new({:tickers => tickers,
@@ -238,7 +238,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |e| e[0] }
             tickers = holdings.map { |e| e[0] }
             shares = holdings.map { |e| e[1] }
             state = Portfolio::State.new({:tickers => tickers,
@@ -368,7 +368,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |e| e[0] }
             tickers = holdings.map { |e| e[0] }
             shares = holdings.map { |e| e[1] }
             state = Portfolio::State.new({:tickers => tickers,
@@ -469,7 +469,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           state = Portfolio::State.new({:tickers => tickers,
@@ -545,7 +545,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           state = Portfolio::State.new({:tickers => tickers,
@@ -614,7 +614,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           state = Portfolio::State.new({:tickers => tickers,
@@ -679,7 +679,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           state = Portfolio::State.new({:tickers => tickers,
@@ -755,7 +755,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
           
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           tickers << 'IWM'
           shares = holdings.map { |e| e[1] }
@@ -814,7 +814,7 @@ class PortfolioController < ApplicationController
       respond_to do |wants|
         wants.js {
 
-          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+          holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
           state = Portfolio::State.new({:tickers => tickers,
@@ -895,15 +895,11 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |a,b| a[0] <=> b[0] }
+            inline_renderable = ""
+            
+            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
             tickers = holdings.map { |e| e[0] }
             shares = holdings.map { |e| e[1] }
-
-            # include cash as a possibility
-            unless tickers.map { |e| e.downcase }.include?('bil')
-              tickers << 'BIL'
-              shares << 1
-            end
 
             state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => shares})
@@ -914,109 +910,36 @@ class PortfolioController < ApplicationController
             eigen_values, percent_variance, eigen_vectors =
                   Portfolio::Composition::ReturnAnalysis::pca(portfolio_state)
 
-            colors = random_colors(eigen_values.size)
-
-            lc = GoogleChart::LineChart.new
-            lc.width = 600
-            lc.height = 300
-
             #identify which dimension to associate a holding with
-            num_dimensions = eigen_vectors.size2
             identified_dimension = Array.new(tickers.size)
-            current_max = Array.new(tickers.size, 0.0)
-            num_dimensions.times { |i|
-              if percent_variance[i] > 0.025
-                vector = eigen_vectors.column(i)
-                mean = vector.mean
+            sqrt_variance = percent_variance.map { |e| Math.sqrt(e) }
+            tickers.size.times { |i|
+              # take the eigen_vector matrix
+              # and for each column in our correlation matrix,
+              # solve for our betas.  find the max beta, and use that as
+              # our identified dimension
 
-                vector.size.times { |j|
-                  dimension_score =  ([vector[j] - mean, vector[j]].max *
-                                                              percent_variance[i]).abs
-                  
-                  if current_max[j] < dimension_score
-                    current_max[j] = dimension_score
-                    identified_dimension[j] = i
-                  end
-                }
-              end
+              c, cov, chisq, status = GSL::MultiFit::linear(eigen_vectors.transpose, portfolio_state.sample_correlation_matrix.column(i))
+              identified_dimension[i] = (c * sqrt_variance).map {|e| e.abs }.sort_index[-1]
             }
-
-            Rails.logger.info(identified_dimension)
 
             unique_dimensions = identified_dimension.uniq.sort
-            
-            total_variance = 0
-            unique_dimensions.sort.each { |i|
-              lc.data "Dimension #{i+1}", eigen_vectors.column(i).to_a, colors[i]
-              total_variance = total_variance + percent_variance[i]
-            }
-            
-            total_variance = (total_variance * 10000).to_i / 10000.0
-            lc.title = "Principal Component Analysis|(#{total_variance*100}% of variance)"
 
-            lc.encoding = :extended
-            lc.show_legend = true
+            clusters = Cluster.hierarchical(portfolio_state.sample_correlation_matrix, unique_dimensions.size)
+            clustered_tickers = clusters.map { |e| e.map { |i| tickers[i] }}
 
-            minimum = eigen_vectors.to_a.flatten.min.floor
-            maximum = eigen_vectors.to_a.flatten.max.ceil
-
-            lc.axis :left, :range => [minimum, maximum],
-              :color => '000000', :font_size => 16, :alignment => :center
-
-            lc.axis :bottom, :range => [1, tickers.size],
-              :color => '000000', :font_size => 8, :alignment => :center,
-              :labels => tickers
-
-            extras = {
-              :chg => "10,10,1,5"
-            }
-
-            lc.write_to("public/images/portfolio/eigen_vector_decomp", {:chdlp => 'b'})
-
-            bc = GoogleChart::BarChart.new
-            bc.title = "Contribution to Variance"
-            bc.width = 500
-            bc.height = 350
-            bc.show_legend = true
-            bc.encoding = :text
-
-            used_variance = []
-            unique_dimensions.each { |i|
-              used_variance << percent_variance[i]*100
-              bc.data "Dimension #{i+1}", [percent_variance[i]*100], colors[i]
-            }
-
-            bc.min = 0
-            bc.max = used_variance.max
-
-            bc.axis(:left) do |axis|
-              axis.color = "000000"
-              axis.font_size = 16
-              axis.range = 0..used_variance.max
-            end
-
-
-            bc.write_to("public/images/portfolio/eigen_value_decomp", {:chdlp => 'b'})
-
-            inline_renderable = "<%= image_tag(\"portfolio/eigen_vector_decomp.png\") %><br/><%= image_tag(\"portfolio/eigen_value_decomp.png\") %>"
-            inline_renderable += "<br/>"
-
-            groups = tickers.zip(identified_dimension).group_by { |e| e[1] }
-
-            groups.keys.sort.each { |group_id|
-              group = groups[group_id]
-              sorted_group = group.sort { |a,b| a[0] <=> b[0] }
-              inline_renderable += "<b>Group #{group_id+1}</b>: "
-              sorted_group.each { |holding|
-                inline_renderable += "#{holding[0]} "
-              }
+            clustered_tickers.each_with_index { |cluster, i|
+              inline_renderable += "<b>Cluster #{i+1}</b>: "
+              inline_renderable += cluster.join(" ")
               inline_renderable += "<br/>"
             }
+            inline_renderable += "<br/>"
+ 
 
             # now that we have reduced dimensionality, find the points in n-space
             # based on their correlation
             n_holdings = tickers.size
-            n_dimensions = [groups.size, 7].min #max 7 dimensions
+            n_dimensions = [[clustered_tickers.size, 3].max, 7].min #min 3, max 7 dimensions
 
             number_of_dimensions = n_holdings * n_dimensions
             feature_limits = []
@@ -1024,10 +947,10 @@ class PortfolioController < ApplicationController
               feature_limits << [-1.0, 1.0]
             }
 
-            # Target error of 5% per entry
-            absolute_tolerance = portfolio_state.sample_correlation_matrix.to_v.map { |e| e.abs }.sum * 0.05
-
-            fitness_function = Proc.new { |fly_position|
+            fitness, features = Optimization::ParticleSwarmOptimization::optimize_over(
+                    [Math.sqrt(number_of_dimensions).floor * 20, 1000].min,
+                    number_of_dimensions, feature_limits,
+                    2, 2, 2, 0.1, 0.05) { |fly_position|
 
               cosine_matrix = GSL::Matrix.alloc(n_holdings, n_holdings)
               positions = GSL::Matrix.alloc(n_holdings, n_dimensions)
@@ -1050,12 +973,6 @@ class PortfolioController < ApplicationController
               (portfolio_state.sample_correlation_matrix - cosine_matrix).to_v.map { |e| e**2 }.sum
             }
 
-            fitness, features = Optimization::ParticleSwarmOptimization::optimize_over(
-                    Math.sqrt(number_of_dimensions).floor * 20,
-                    number_of_dimensions, feature_limits,
-                    2, 2, 2, 0.1, 0.05, fitness_function,
-                    {:absolute_tolerance => absolute_tolerance})
-
             positions = GSL::Matrix.alloc(n_holdings, n_dimensions)
               tickers.size.times { |i|
                 v = features.get(i*n_dimensions, n_dimensions).normalize
@@ -1071,7 +988,9 @@ class PortfolioController < ApplicationController
               data_points << (positions.row(i) * vector_scores[i])
             }
 
-            hull_summary = Convex::qhull(data_points.size, n_dimensions, data_points)
+            hull_summary = Convex::qhull(data_points.size, 
+                                         n_dimensions,
+                                         data_points)
             indices = hull_summary[:indices].uniq
             faces = hull_summary[:faces]
 
@@ -1113,9 +1032,10 @@ class PortfolioController < ApplicationController
               }
             }
 
-            weights = GSL::Vector[*indices.map { |i| contributed_inner_surface_area[i] /
-                                                        total_inner_surface_area }]
-
+            weights = GSL::Vector[*indices.map { |i|
+                contributed_inner_surface_area[i] /
+                   total_inner_surface_area }]
+            
             select_tickers = indices.map { |e| tickers[e] }
             select_shares = indices.map { |e| shares[e] }
 
