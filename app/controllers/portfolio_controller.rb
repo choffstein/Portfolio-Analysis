@@ -368,7 +368,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |e| e[0] }
+            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
             tickers = holdings.map { |e| e[0] }
             shares = holdings.map { |e| e[1] }
             state = Portfolio::State.new({:tickers => tickers,
@@ -948,7 +948,7 @@ class PortfolioController < ApplicationController
             }
 
             fitness, features = Optimization::ParticleSwarmOptimization::optimize_over(
-                    [Math.sqrt(number_of_dimensions).floor * 20, 1000].min,
+                    [Math.sqrt(number_of_dimensions).floor * 20, 500].min,
                     number_of_dimensions, feature_limits,
                     2, 2, 2, 0.1, 0.05) { |fly_position|
 

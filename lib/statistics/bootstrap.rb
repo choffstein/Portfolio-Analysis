@@ -2,6 +2,9 @@
 module Statistics
   module Bootstrap
 
+    Cache = Struct.new(:weight, :length, :series)
+    @@cache = Cache.new(nil, nil, nil)
+
     private
     class WeightedArray < Array
       def initialize(other_array, weights)
@@ -38,6 +41,17 @@ module Statistics
           return entry[2]
         end
       end
+
+      def random_elements_with_vec(v)
+        n = v.size / 2
+        entries = Array.new(n)
+        n.times { |i|
+          entry = @table[(v[i*2] * @table.size).floor]
+          entries[i] = v[i*2 + 1] < entry[0] ? entry[1] : entry[2]
+        }
+
+        return entries
+      end
     end
 
     public
@@ -57,26 +71,36 @@ module Statistics
       returns_as_array = returns.to_a
       total_blocks = returns_as_array.size - block_size
       
-      weights = (0..total_blocks).map { |i| weight_factor**i }.reverse
-
-      blocks = []
-      0.upto(total_blocks-1) { |i|
-        blocks << returns_as_array[i...(i+block_size)]
-      }
 
       #TODO: weighted blocks should be recomputed every time a block is
-      #      placed
-      weighted_blocks = WeightedArray.new(blocks, weights)
-      series = GSL::Matrix.alloc(n, target_length)
-      0.upto(n-1) { |i|
-        0.upto((target_length / block_size) - 1) { |j|
-          random_block = weighted_blocks.random_element
-          (j*block_size).upto((j+1)*block_size-1) { |k|
-            series[i,k] = random_block[k-j*block_size]
-          }
-        }
-      }
+      #      placed?
 
+      # cache the series so we don't have to construct it multiple times if
+      # we are doing it with the same weight factor
+      if @@cache[:weight].nil? || weight_factor != @@cache[:weight] || @@cache[:length] != total_blocks
+        weights = (0..total_blocks).map { |i| weight_factor**i }.reverse
+        blocks = []
+        total_blocks.times { |i|
+          blocks << returns_as_array[i...(i+block_size)]
+        }
+        @@cache[:series] = WeightedArray.new(blocks, weights)
+        @@cache[:weight] = weight_factor
+        @@cache[:length] = total_blocks
+      end
+
+
+      r = GSL::Rng.alloc
+      series = GSL::Matrix.alloc(n, target_length)
+      n.times { |i|
+        #overwrite our row with random blocks
+        v = r.uniform(2 * target_length / block_size)
+        
+        row = @@cache[:series].random_elements_with_vec(v)
+        #transform it to a vector
+        vec = GSL::Vector[*row.flatten]
+        #insert it into the series matrix
+        series.set_row(i, vec)
+      }
       return series
     end
   end

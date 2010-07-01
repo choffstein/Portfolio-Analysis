@@ -7,7 +7,7 @@ module Portfolio
       portfolio_returns = portfolio_log_returns.map { |e| Math.exp(e) - 1.0 }
 
       n = portfolio_returns.size
-      steps = (n-window)/step_size
+      steps = ((n-window)/step_size).floor
       marginal_contributions = GSL::Matrix.alloc(factor_returns.size1, steps)
 
       factor_returns.size1.times { |i|

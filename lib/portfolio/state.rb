@@ -70,7 +70,7 @@ module Portfolio
         compute_sample_covariance_matrix
       end
 
-      unless params[:sample_correlation_matrix].nil?
+      unless params[:sample_correlatfion_matrix].nil?
         @sample_correlation_matrix = params[:sample_correlation_matrix]
       else
         compute_sample_correlation_matrix
@@ -404,35 +404,26 @@ module Portfolio
         #  }
         #}
 
-        # construct our shrinkage target
-        f = GSL::Matrix.alloc(n, n)
-        n.times { |i|
-          f[i,i] = @sample_covariance_matrix[i,i]
-          (i+1).upto(n-1) { |j|
-            f[i,j] = r_bar * Math.sqrt(@sample_covariance_matrix[i,i] *
-                                       @sample_covariance_matrix[j,j])
-            f[j,i] = f[i,j]
-          }
-        }
 
+        diagonal = @sample_covariance_matrix.diagonal.map { |e| Math.sqrt(e) }
+        f = r_bar * diagonal.col * diagonal
+
+        
         num_dates = @log_returns.size2.to_i
 
         # construct our shrinkage intensity, delta
         pi = GSL::Matrix.alloc(n, n)
         n.times { |i|
           n.times { |j|
-            pi[i,j] = 0
-            num_dates.times { |t|
-              pi[i,j] += (((@log_returns[i,t] - mean_log_returns[i]) *
-                          (@log_returns[j,t] - mean_log_returns[j])) -
-                                      @sample_covariance_matrix[i,j]) ** 2
-            }
-            pi[i,j] = pi[i,j] / num_dates.to_f
+            r =        ((@log_returns.row(i) - mean_log_returns[i]) *
+                        (@log_returns.row(j) - mean_log_returns[j]) -
+                                @sample_covariance_matrix[i,j])
+
+            pi[i,j] = (r * r.col) / num_dates.to_f
           }
         }
 
         pi_hat = pi.to_v.sum
-        #Rails.logger.info("Pi-Hat: #{pi_hat}")
 
         rho_hat = pi.trace
         n.times { |i|
@@ -440,10 +431,10 @@ module Portfolio
             rho_hat += (r_bar / 2.0) *
                     (Math.sqrt(@sample_covariance_matrix[j,j] /
                            @sample_covariance_matrix[i,i]) *
-                             asyscov_est(mean_log_returns, num_dates, i, i, j) +
+                             asyscov_est(mean_log_returns, i, i, j) +
                      Math.sqrt(@sample_covariance_matrix[i,i] /
                            @sample_covariance_matrix[j,j]) *
-                             asyscov_est(mean_log_returns, num_dates, j, i, j)) unless i == j
+                             asyscov_est(mean_log_returns, j, i, j)) unless i == j
           }
         }
         #Rails.logger.info("Rho-Hat: #{rho_hat}")
@@ -471,14 +462,11 @@ module Portfolio
       end unless !@covariance_matrix.nil?
     end
 
-    def asyscov_est(v, n, k, i, j)
-          s = 0
-          n.times { |t|
-            s = s + ((@log_returns[j,t] - v[j])**2 - @sample_covariance_matrix[k,k]) *
-                    ((@log_returns[i,t] - v[i])*(@log_returns[j,t] - v[j]) - @sample_covariance_matrix[i,j])
-          }
-          s = s / n.to_f
-          return s
+    def asyscov_est(v, k, i, j)
+          yj = (@log_returns.row(j) - v[j]).map { |e| e ** 2} - @sample_covariance_matrix[k,k]
+          yij = (@log_returns.row(i) - v[i]) * (@log_returns.row(j) - v[j]) - @sample_covariance_matrix[i,j]
+
+          return yj * yij.col / yj.size.to_f
     end
   end
 end
