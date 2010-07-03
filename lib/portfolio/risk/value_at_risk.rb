@@ -96,8 +96,8 @@ module Portfolio
 
         Status.info("Computing Portfolio VaR")
         portfolio_vars = cornish_fisher(portfolio_state.to_log_returns, days)
-        portfolio_var = portfolio_vars[:var] * total_portfolio_value
-        portfolio_cvar = portfolio_vars[:cvar] * total_portfolio_value
+        portfolio_var = portfolio_vars[:var] #* total_portfolio_value
+        portfolio_cvar = portfolio_vars[:cvar] #* total_portfolio_value
 
         vars = GSL::Vector.alloc(n)
         cvars = GSL::Vector.alloc(n)
@@ -107,8 +107,8 @@ module Portfolio
           vars[i] =  value_at_risk[:var]
           cvars[i] = value_at_risk[:cvar]
         }
-        vars = vars * total_holdings
-        cvars = cvars * total_holdings
+        vars = vars #* total_holdings
+        cvars = cvars #* total_holdings
 
         # see how much each var contributes to the overall portfolio
         # we use the covariance matrix to incorporate the overlap
@@ -128,7 +128,7 @@ module Portfolio
           :individual_vars => vars,
           :individual_cvars => cvars,
           :proportion_of_var => risks / risks.abs.sum,
-          :marginal_vars => beta * portfolio_var / total_portfolio_value
+          :marginal_vars => beta * portfolio_var #/ total_portfolio_value
         }
       end
     end

@@ -25,12 +25,7 @@ module Portfolio
         keys = []
         Status.update("Loading company data")
         @tickers.each { |ticker|
-          c = Company.first(:conditions => {:ticker => ticker})
-          if c.nil?
-            #if we can't find the company, create a new one (and download the data)
-            c = Company.new({:ticker => ticker})
-            c.save!
-          end
+          c = Company.new({:ticker => ticker})
           @companies[ticker] = c
                 
           if first
@@ -140,15 +135,7 @@ module Portfolio
       
       begin
         # using @log_returns,
-        @portfolio_log_returns = GSL::Vector.alloc(@dates.size)
-        @portfolio_log_returns.set_all(0.0)
-        0.upto(@log_returns.size2 - 1) { |d|
-
-          # add each share's value to the overall portfolio value
-          0.upto(@tickers.size-1) { |i|
-           @portfolio_log_returns[d] += @weights[i] * @log_returns[i,d]
-          }
-        }
+        @portfolio_log_returns = @weights * @log_returns
       end unless !@portfolio_log_returns.nil?
       
       return @portfolio_log_returns
@@ -160,10 +147,8 @@ module Portfolio
         @tickers.size.times { |i|
           ticker = @tickers[i]
           shares = @number_of_shares[i]
-
-          c = Company.first(:conditions => {:ticker => ticker})
-
-          c.dividends.each { |k,v|
+          
+          @companies[ticker].dividends.each { |k,v|
             income[k] += shares * v
           }
         }

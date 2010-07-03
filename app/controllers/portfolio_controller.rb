@@ -134,32 +134,15 @@ class PortfolioController < ApplicationController
 
           sa.write_to("public/images/portfolio/percent_contribution")
 
-          bc = GoogleChart::BarChart.new
-          bc.title = "Basis Point Change in Portfolio Volatility|per 100 Basis Point Change in Holding Weight|(Marginal Contribution to Volatility)"
-          bc.width = 400
-          bc.height = 400
-          bc.show_legend = true
-          bc.encoding = :text
-
+          inline_renderable = "<%= image_tag(\"portfolio/percent_contribution.png\") %><br/><br/>"
           num_columns = marginal_contributions.size2
           current_marginal_contributions = marginal_contributions.column(num_columns-1).to_a
 
-          bc.axis(:left) do |axis|
-            axis.color = "000000"
-            axis.font_size = 16
-            axis.range = 0..current_marginal_contributions.max*1000
-          end
-
-          bc.min = 0
-          bc.max = current_marginal_contributions.max*1000
-
-          tickers.size.times { |i|
-            bc.data "#{tickers[i]}", [current_marginal_contributions[i]*1000], colors[i]
+          tickers.each_with_index { |ticker, i|
+            inline_renderable += "<b>#{ticker}</b>: #{current_marginal_contributions[i]*1000}<br/>"
           }
 
-          bc.write_to("public/images/portfolio/marginal_contributions")
-
-          render :inline => "<%= image_tag(\"portfolio/percent_contribution.png\") %><br/><%= image_tag(\"portfolio/marginal_contributions.png\") %>"
+          render :inline => inline_renderable
         end
       }
     end
@@ -238,7 +221,7 @@ class PortfolioController < ApplicationController
           if session[:portfolio].nil?
             render :text => "Please upload portfolio first"
           else
-            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort { |e| e[0] }
+            holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
             tickers = holdings.map { |e| e[0] }
             shares = holdings.map { |e| e[1] }
             state = Portfolio::State.new({:tickers => tickers,
@@ -329,11 +312,7 @@ class PortfolioController < ApplicationController
 
 
             tickers.each { |ticker|
-              company = Company.first(:conditions => {:ticker => ticker.downcase})
-              if company.nil?
-                company = Company.new({:ticker => ticker.downcase})
-                company.save!
-              end
+              company = Company.new({:ticker => ticker.downcase})
 
               if available_sectors.include?(company.sector)
                 sector_hash[company.sector] += 1
@@ -387,79 +366,25 @@ class PortfolioController < ApplicationController
             marginal_vars = composite_risk[:marginal_vars]
             component_var_proportion = composite_risk[:proportion_of_var]
 
-            colors = random_colors(tickers.size)
+            inline_renderable = "<b>Portfolio VaR</b>: #{portfolio_var}<br/>"
+            inline_renderable += "<b>Portfolio CVaR</b>: #{portfolio_cvar}<br/>"
 
-            bc = GoogleChart::BarChart.new
-            bc.title = "Individual Value-at-Risk|(Measured in Dollars)"
-            bc.width = 500
-            bc.height = 350
-            bc.show_legend = true
-            bc.encoding = :text
-
-            bc.min = 0
-            bc.max = individual_vars.max
-
-            bc.axis(:left) do |axis|
-              axis.color = "000000"
-              axis.font_size = 16
-              axis.range = 0..individual_vars.max
-            end
-
-            tickers.size.times { |i|
-              bc.data "#{tickers[i]}", [individual_vars[i]], colors[i]
+            inline_renderable += "<h3>Individual VaRs</h3><br/>"
+            tickers.each_with_index { |ticker, i|
+              inline_renderable += "<b>#{ticker}</b>: #{individual_vars[i]}<br/>"
             }
 
-            bc.write_to("public/images/portfolio/individual_vars", {:chdlp => 'b'})
-
-            bc = GoogleChart::BarChart.new
-            bc.title = "Individual Conditional Value-at-Risk|(Measured in Dollars)"
-            bc.width = 500
-            bc.height = 350
-            bc.show_legend = true
-            bc.encoding = :text
-
-            bc.min = 0
-            bc.max = individual_cvars.max
-
-            bc.axis(:left) do |axis|
-              axis.color = "000000"
-              axis.font_size = 16
-              axis.range = 0..individual_cvars.max
-            end
-
-            tickers.size.times { |i|
-              bc.data "#{tickers[i]}", [individual_cvars[i]], colors[i]
+            inline_renderable += "<br/><h3>Conditional VaRs</h3><br/>"
+            tickers.each_with_index { |ticker, i|
+              inline_renderable += "<b>#{ticker}</b>: #{individual_cvars[i]}<br/>"
             }
 
-            bc.write_to("public/images/portfolio/individual_cvars", {:chdlp => 'b'})
-
-            bc = GoogleChart::BarChart.new
-            bc.title = "Marginal Value-at-Risk (in $)"
-            bc.width = 500
-            bc.height = 350
-            bc.show_legend = true
-            bc.encoding = :text
-
-            bc.min = 0
-            bc.max = marginal_vars.max
-
-            bc.axis(:left) do |axis|
-              axis.color = "000000"
-              axis.font_size = 16
-              axis.range = 0..marginal_vars.max
-            end
-
-            tickers.size.times { |i|
-              bc.data "#{tickers[i]}", [marginal_vars[i]], colors[i]
+            inline_renderable += "<br/><h3>Marginal VaRs</h3><br/>"
+            tickers.each_with_index { |ticker, i|
+              inline_renderable += "<b>#{ticker}</b>: #{marginal_vars[i]}<br/>"
             }
 
-            bc.write_to("public/images/portfolio/marginal_vars", {:chdlp => 'b'})
-
-            render :inline => "<%= \"Portfolio VaR: #{portfolio_var}\" %><br/>
-                               <%= \"Portfolio CVaR: #{portfolio_cvar}\" %><br/>
-                            <%= image_tag(\"portfolio/individual_vars.png\") %><br/>
-                            <%= image_tag(\"portfolio/individual_cvars.png\") %><br/>
-                            <%= image_tag(\"portfolio/marginal_vars.png\") %><br/>"
+            render :inline => inline_renderable
           end
         }
       end
@@ -824,7 +749,7 @@ class PortfolioController < ApplicationController
           sliced_state = state.slice(offset) # ~5 years
 
           points = Portfolio::Risk::upside_downside_capture(sliced_state,
-            {:tikers => ["IWM"], :number_of_shares => [1]}, 60, 20) << [1.0,1.0]
+            {:tickers => ["IWM"], :number_of_shares => [1]}, 60, 20) << [1.0,1.0]
   
 
           total_points = points.size - 2

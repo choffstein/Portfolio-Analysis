@@ -1,10 +1,13 @@
-class DataPoint < ActiveRecord::Base
-    belongs_to :company
+class DataPoint
+  attr_reader :date, :open, :high, :low, :close, :volume, :adjusted_close
 
-    # this is very, very slow
-    #validates_uniqueness_of :date, :scope => :company_id
+  def initialize(params)
+    params.each { |k, v|
+      instance_variable_set("@#{k}",v)
+    }
+  end
 
   def to_s
-    "Date: #{Time.at(self.date)} Open: #{self.open} High: #{self.high} Low: #{self.low} Close: #{self.close} Volume: #{self.volume} Adjusted Close: #{self.adjusted_close}"
+    "Date: #{Time.at(@date)} Open: #{@open} High: #{@high} Low: #{@low} Close: #{@close} Volume: #{@volume} Adjusted Close: #{@adjusted_close}"
   end
 end

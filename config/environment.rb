@@ -44,7 +44,6 @@ Rails::Initializer.run do |config|
   config.gem 'rubystats'
   config.gem 'statistics2'
   config.gem 'third_base'
-  config.gem 'crewait'
   config.gem 'clusterer'
 
   # Only load the plugins named here, in the order given (default is alphabetical).
@@ -53,7 +52,7 @@ Rails::Initializer.run do |config|
 
   # Skip frameworks you're not going to use. To use Rails without a database,
   # you must remove the Active Record framework.
-  # config.frameworks -= [ :active_record, :active_resource, :action_mailer ]
+  config.frameworks -= [ :active_record, :active_resource, :action_mailer ]
 
   # Activate observers that should always be running
   # config.active_record.observers = :cacher, :garbage_collector, :forum_observer

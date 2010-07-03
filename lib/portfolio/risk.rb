@@ -6,8 +6,11 @@ module Portfolio
       factor_returns = factor_log_returns.map { |e| Math.exp(e) - 1.0 }
       portfolio_returns = portfolio_log_returns.map { |e| Math.exp(e) - 1.0 }
 
+      raise "Not enough information to analyze" if portfolio_returns.size < window
+      
       n = portfolio_returns.size
       steps = ((n-window)/step_size).floor
+      Rails.logger.info(steps)
       marginal_contributions = GSL::Matrix.alloc(factor_returns.size1, steps)
 
       factor_returns.size1.times { |i|

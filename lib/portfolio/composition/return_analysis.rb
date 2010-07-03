@@ -68,8 +68,11 @@ module Portfolio
 
         portfolio_log_returns = shared_portfolio_state.to_log_returns.to_a
         factor_log_returns = shared_factors_state.log_returns
+
+        raise "Not enough information to analyze" if dates.size < window_size
             
         n = (dates.size - window_size) / sampling_period
+        
         betas = GSL::Matrix.alloc(factors.size, n)
         r2 = []
         n.times { |i|
