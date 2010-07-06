@@ -17,7 +17,6 @@ class Company
     @ticker = params[:ticker].upcase unless params[:ticker].nil?
    
     load_data
-    generate_image
   end
     
   def load_data
@@ -211,54 +210,6 @@ class Company
   end
 
   private
-
-  def generate_image
-    today = Date.today
-    file = "public/images/tickers/#{@ticker}_#{today.day}_#{today.mon}_#{today.year}"
-
-    if !File.exist?("#{file}.png")
-      system("rm public/images/tickers/#{@ticker}*") #delete any other pictures
-
-      Status.info("Generated graph of adjusted closes for #{@ticker}")
-      adjusted_close = adjusted_closes
-      
-      lc = GoogleChart::LineChart.new
-      lc.width = 600
-      lc.height = 300
-      lc.title = "Adjusted Close"
-
-      dates = adjusted_close.map { |d,v| d }
-      values = adjusted_close.map { |d,v| v}
-
-      lc.data "Adjusted Close", values, 'FF6600'
-
-      lc.encoding = :extended
-      lc.show_legend = true
-
-      lc.axis :left, :range => [(values.min*0.9).floor, (values.max*1.1).ceil],
-        :color => '000000', :font_size => 10, :alignment => :center
-
-      # FIX: Make this global?  Local?  Class method of array?
-      def every(a, n)
-        a.select {|x| a.index(x) % n == 0}
-      end
-      
-
-      labels = every(dates.map{ |t| Time.at(t).strftime("%m/%d/%Y")}, 100)
-      labels << Time.at(dates[-1]).strftime("%m/%d/%Y")
-
-      lc.axis :bottom, :range => [1, dates.size],
-        :color => '000000', :font_size => 8, :alignment => :center,
-        :labels => labels
-
-      extras = {
-        :chg => "10,10,1,5"
-      }
-      lc.write_to(file, extras)
-
-      @image_generation_time = Date.today
-    end
-  end
 
   MAX_DOWNLOAD_ATTEMPTS = 10
   

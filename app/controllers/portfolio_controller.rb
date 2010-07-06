@@ -33,7 +33,6 @@ class PortfolioController < ApplicationController
         if session[:portfolio].nil?
           render :text => "Please upload portfolio first"
         else
-
           holdings = session[:portfolio].tickers.zip(session[:portfolio].shares).sort_by { |e| e[0] }
           tickers = holdings.map { |e| e[0] }
           shares = holdings.map { |e| e[1] }
@@ -41,10 +40,12 @@ class PortfolioController < ApplicationController
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => shares})
 
+          font_size = [1, (25 / tickers.size).floor].max
+
           inline_renderable = "<table width=#{tickers.size*10} height=#{tickers.size*10} border=0>"
           inline_renderable += "<tr><td></td>"
           tickers.each { |t|
-            inline_renderable += "<td><b>#{t.upcase}</b></td>"
+            inline_renderable += "<td><font size=\"#{font_size}\"><b>#{t.upcase}</b></font></td>"
           }
           inline_renderable += "<tr>"
 
@@ -62,20 +63,30 @@ class PortfolioController < ApplicationController
           tickers.size.times { |i|
             r = correlation_matrix.row(i)
             inline_renderable += "<tr>"
-            inline_renderable += "<td><b>#{tickers[i].upcase}</b></td>"
+            inline_renderable += "<td><font size=\"#{font_size}\"><b>#{tickers[i].upcase}</b></font></td>"
             r.size.times { |j|
               clamped = (r[j] * 100).to_i / 100.0
 
               # generate the appropriate color
               color = hsv_to_rgb_string(0, clamped.abs**2, 1.0)
 
-              inline_renderable += "<td bgcolor=\"#{color}\">#{clamped}</td>"
+              inline_renderable += "<td bgcolor=\"#{color}\"><font size=\"#{font_size}\">#{clamped}</font></td>"
             }
             inline_renderable += "</tr>"
           }
 
+          ipc_pct = (1.0 - ipc)/2.0
+          #weird fucking hack to get the http get to go through ... requires a newline?!
+          image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@a,000000,1,#{ipc_pct}:.5,7,0
+            ")
+          File.open("public/images/portfolio/heat_chart.png", "w") { |f|
+            Rails.logger.info(image)
+            f << image
+          }
+
           inline_renderable += "</table>"
-          inline_renderable += "<br/><b>IPC:</b> #{100*(1.0 - ipc)/2.0}%"
+          inline_renderable += "<br/><b>IPC:</b> #{100*ipc_pct}%<br/>"
+          inline_renderable += "<%= image_tag 'portfolio/heat_chart.png' %><br/>"
           inline_renderable += "<br/><b>Concentration Coefficient:</b> #{cc}"
           render :inline => inline_renderable
         end
@@ -95,7 +106,7 @@ class PortfolioController < ApplicationController
           state = Portfolio::State.new({:tickers => tickers,
               :number_of_shares => shares})
 
-          window_size = 60
+          window_size = 120
           sampling_period = 20
           
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
@@ -108,7 +119,7 @@ class PortfolioController < ApplicationController
             window_size, sampling_period, marginal_contributions)
 
           sa = GoogleChart::StackedArea.new
-          sa.title = "3 Month Contribution to Volatility (measured monthly)"
+          sa.title = "6 Month Contribution to Volatility (measured monthly)"
           sa.width = 600
           sa.height = 300
           sa.show_legend = true
@@ -255,7 +266,7 @@ class PortfolioController < ApplicationController
             lc = GoogleChart::LineChart.new
             lc.width = 600
             lc.height = 300
-            lc.title = "4 Quarter Income Projection|(Monte Carlo Simulation with n = 2500)"
+            lc.title = "4 Quarter Income Projection|(Monte Carlo Simulation with n = 10,000)"
 
             
             lc.data "1 Pos. Std. Devs", one_std_above, 'BCED91', "1,6,3"
@@ -295,21 +306,19 @@ class PortfolioController < ApplicationController
 
             tickers = session[:portfolio].tickers
 
-            @chart = GoogleVisualr::PieChart.new
-            @chart.add_column('string', 'Sector')
-            @chart.add_column('number', 'Holdings')
-
             sector_hash = Hash.new(0.0)
+
             available_sectors = ['Basic Materials',
                                  'Conglomerates',
                                  'Consumer Goods',
                                  'Financial',
-                                 'Health Care',
+                                 'Healthcare',
                                  'Industrial Goods',
                                  'Services',
                                  'Technology',
                                  'Utilities']
 
+            colors = random_colors(available_sectors.size)
 
             tickers.each { |ticker|
               company = Company.new({:ticker => ticker.downcase})
@@ -321,21 +330,21 @@ class PortfolioController < ApplicationController
               end
             }
 
-            @chart.add_rows(sector_hash.size)
             i = 0
-            sector_hash.each { |k, v|
-              @chart.set_value(i, 0, k)
-              @chart.set_value(i, 1, v)
+            pc = GoogleChart::PieChart.new
+            sector_hash.keys.sort.each { |k|
+              clamped = ((sector_hash[k] / tickers.size.to_f) * 10000).to_i / 10000.0
+              pc.data "#{k} (#{sector_hash[k].to_i} at #{clamped*100}%)", sector_hash[k], colors[i]
               i = i + 1
             }
+            pc.height = 300
+            pc.width = 600
+            pc.title = "Sector Allocation (Dow Jones Definition)"
+            #pc.is_3d = true
 
-            options = { :width => 600, :height => 400,
-              :title => "Sector Allocation (Dow Jones Definition)", :is3D => true }
-            options.each_pair { | key, value |
-              @chart.send "#{key}=", value
-            }
+            pc.write_to("public/images/portfolio/sector_allocation", {:chdlp => 'b'})
 
-            render :inline => "<%= @chart.render('sector_allocation_results') %>"
+            render :inline => "<%= image_tag(\"portfolio/sector_allocation.png\") %>"
           end
         }
       end
@@ -364,7 +373,7 @@ class PortfolioController < ApplicationController
             individual_vars = composite_risk[:individual_vars]
             individual_cvars = composite_risk[:individual_cvars]
             marginal_vars = composite_risk[:marginal_vars]
-            component_var_proportion = composite_risk[:proportion_of_var]
+            component_vars = composite_risk[:component_vars]
 
             inline_renderable = "<b>Portfolio VaR</b>: #{portfolio_var}<br/>"
             inline_renderable += "<b>Portfolio CVaR</b>: #{portfolio_cvar}<br/>"
@@ -377,6 +386,11 @@ class PortfolioController < ApplicationController
             inline_renderable += "<br/><h3>Conditional VaRs</h3><br/>"
             tickers.each_with_index { |ticker, i|
               inline_renderable += "<b>#{ticker}</b>: #{individual_cvars[i]}<br/>"
+            }
+
+            inline_renderable += "<br/><h3>Component VaRs</h3><br/>"
+            tickers.each_with_index { |ticker, i|
+              inline_renderable += "<b>#{ticker}</b>: #{component_vars[i]} -- #{component_vars[i] / portfolio_var}<br/>"
             }
 
             inline_renderable += "<br/><h3>Marginal VaRs</h3><br/>"
@@ -422,9 +436,13 @@ class PortfolioController < ApplicationController
 
           x_axis_length = betas.row(0).size * sampling_period
 
-          factor_names = factors.keys
-          betas.size1.times { |i|
-            sa.data "#{factor_names[i]}", betas.row(i).to_a, random_color
+          colors = random_colors(factors.keys.size)
+
+          factor_names = factors.keys.sort
+          i = 0
+          factor_names.each { |fn|
+            sa.data "#{fn}", betas.row(factors.keys.index(fn)).to_a, colors[i]
+            i = i + 1
           }
 
           sa.axis(:left) do |axis|
@@ -443,8 +461,9 @@ class PortfolioController < ApplicationController
           lc.height = 150
           lc.title = "R-Squared"
 
-          lc.data "Unexplained", unexplained, random_color
-          lc.data "Explained", r_squared, random_color
+          colors = random_colors(2)
+          lc.data "Unexplained", unexplained, colors[0]
+          lc.data "Explained", r_squared, colors[1]
           
           lc.encoding = :simple
           lc.show_legend = true
@@ -479,7 +498,7 @@ class PortfolioController < ApplicationController
           offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
           sliced_state = state.slice(offset) # ~5 years
 
-          window_size = 125
+          window_size = 120
           sampling_period = 10
           
           factors = Portfolio::Composition::ReturnAnalysis::STYLE_PROXIES
@@ -632,9 +651,10 @@ class PortfolioController < ApplicationController
 
           x_axis_length = betas.row(0).size * sampling_period
 
+          colors = random_colors(factors.keys.size)
           factor_names = factors.keys
           betas.size1.times { |i|
-            sa.data "#{factor_names[i]}", betas.row(i).to_a, random_color
+            sa.data "#{factor_names[i]}", betas.row(i).to_a, colors[i]
           }
 
           sa.axis(:left) do |axis|
@@ -653,8 +673,9 @@ class PortfolioController < ApplicationController
           lc.height = 150
           lc.title = "R-Squared"
 
-          lc.data "Unexplained", unexplained, random_color
-          lc.data "Explained", r_squared, random_color
+          colors = random_colors(2)
+          lc.data "Unexplained", unexplained, colors[0]
+          lc.data "Explained", r_squared, colors[1]
 
           lc.encoding = :simple
           lc.show_legend = true
@@ -749,8 +770,7 @@ class PortfolioController < ApplicationController
           sliced_state = state.slice(offset) # ~5 years
 
           points = Portfolio::Risk::upside_downside_capture(sliced_state,
-            {:tickers => ["IWM"], :number_of_shares => [1]}, 60, 20) << [1.0,1.0]
-  
+            {:tickers => ["IWM"], :number_of_shares => [1]}, 120, 5) << [1.0, 1.0]
 
           total_points = points.size - 2
           
@@ -760,10 +780,32 @@ class PortfolioController < ApplicationController
           min_x = points.map { |e| e[0] }.flatten.min
           min_y = points.map { |e| e[1] }.flatten.min
 
+          mean_x = points[0...total_points].inject(0.0) { |s, e| s + e[0] } / total_points.to_f
+          var_x = points[0...total_points].inject(0.0) { |s, e| s + (e[0] - mean_x)**2 } / total_points.to_f
+
+          mean_y = points[0...total_points].inject(0.0) { |s, e| s + e[1] } / total_points.to_f
+          var_y = points[0...total_points].inject(0.0) { |s, e| s + (e[1] - mean_y)**2 } / total_points.to_f
+
+          z = 1.96
+          left = mean_x - z*Math.sqrt(var_x)
+          right = mean_x + z*Math.sqrt(var_x)
+          top = mean_y + z*Math.sqrt(var_y)
+          bottom = mean_y - z*Math.sqrt(var_y)
+          
+          max_x = [max_x, right].max
+          min_x = [min_x, left].min
+          max_y = [max_y, top].max
+          min_y = [min_y, bottom].min
+
           # add line points (edges of bounding box)
           points << [[min_x, min_y].max, [min_x, min_y].max] <<
                     [[max_y, max_x].min, [max_y, max_x].min]
 
+          points <<  [left, top] <<  #top left
+                     [right,top] <<  #top right
+                     [right, bottom] <<  #bottom right
+                     [left, bottom] <<  #bottom left
+                     [left, top]     #top left
           
           colors = []
           total_points.times { |i|
@@ -772,14 +814,15 @@ class PortfolioController < ApplicationController
           colors.unshift("FF0000") #current time is red
           colors.unshift("00FF00") #portfolio is green
 
-          colors.unshift("000000") #mask our final points
-          colors.unshift("000000")
+          7.times {
+            colors.unshift("000000") #mask our final points
+          }
 
           # Scatter Plot
           sc = GoogleChart::ScatterPlot.new
           sc.width = 500
           sc.height = 500
-          sc.title = "3-Month Up / Down Capture Analysis|against Russell 2000 (measured monthly)"
+          sc.title = "6-Month Up / Down Capture Analysis|against Russell 2000 (measured weekly)"
           sc.data "", points, colors.reverse
           sc.encoding = :extended
 
@@ -792,17 +835,27 @@ class PortfolioController < ApplicationController
           sc.min_y = min_y
 
           sizes = Array.new(points.size,1)
-          sizes[-3] = 0
-          sizes[-2] = 0 #mask our final points
-          sizes[-1] = 0
+          # -7 through -1 should be zeros
+          7.times { |i|
+            sizes[-(i+1)] = 0
+          }
           sc.point_sizes sizes
 
           sc.axis(:bottom, :range => min_x..max_x)
           sc.axis(:left, :range => min_y..max_y)
 
           #FIX: This seems like a rather ugly way to do this
+
+          # we go from -7 to -1
+          # -7 and -6 should be connected
+          # -5 through -1 should be connected
+          chm = "D,3366FF,1,#{points.size-7}:#{points.size-6}:,1,-1|"
+          4.times { |i|
+            chm += "D,33FF66,1,#{points.size-(5-i)}:#{points.size-(4-i)}:,1,-1|"
+          }
+          chm += "s,00FF00,0,#{points.size-8},16"
           extras = {
-            :chm => "D,C6DEFF,1,#{points.size-2}:#{points.size-1}:,1,-1|s,00FF00,0,#{points.size-3},16"
+            :chm => chm
           }
 
           sc.write_to("public/images/portfolio/up_down_capture", extras)
@@ -859,7 +912,7 @@ class PortfolioController < ApplicationController
             }
             inline_renderable += "<br/>"
  
-
+=begin
             # now that we have reduced dimensionality, find the points in n-space
             # based on their correlation
             n_holdings = tickers.size
@@ -976,7 +1029,7 @@ class PortfolioController < ApplicationController
               inline_renderable += "#{t}: #{w}<br/>"
             }
             inline_renderable += "<br/><b>IPC:</b> #{100*(1.0 - ipc)/2.0}%<br/>"
-
+=end
             render :inline => inline_renderable
           end
         }
