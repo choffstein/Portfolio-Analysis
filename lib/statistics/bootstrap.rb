@@ -18,7 +18,7 @@ module Statistics
         
         n = elements.size
         elements.map! { |a,w| [a, w*(n-1)]}
-        elements.sort! { |e1,e2| e1[1] <=> e2[1] }
+        elements = elements.sort_by { |e| e[1] }
 
         while elements.size > 2
           p = elements[0][1]
@@ -79,10 +79,11 @@ module Statistics
       # we are doing it with the same weight factor
       if @@cache[:weight].nil? || weight_factor != @@cache[:weight] || @@cache[:length] != total_blocks
         weights = (0..total_blocks).map { |i| weight_factor**i }.reverse
-        blocks = []
-        total_blocks.times { |i|
-          blocks << returns_as_array[i...(i+block_size)]
-        }
+        #blocks = []
+        #total_blocks.times { |i|
+        #  blocks << returns_as_array[i...(i+block_size)]
+        #}
+        blocks = (0..total_blocks).to_a
         @@cache[:series] = WeightedArray.new(blocks, weights)
         @@cache[:weight] = weight_factor
         @@cache[:length] = total_blocks
@@ -90,7 +91,7 @@ module Statistics
 
 
       r = GSL::Rng.alloc
-      series = GSL::Matrix.alloc(n, target_length)
+      indices = GSL::Matrix.alloc(n, target_length / block_size)
       n.times { |i|
         #overwrite our row with random blocks
         v = r.uniform(2 * target_length / block_size)
@@ -99,9 +100,9 @@ module Statistics
         #transform it to a vector
         vec = GSL::Vector[*row.flatten]
         #insert it into the series matrix
-        series.set_row(i, vec)
+        indices.set_row(i, vec)
       }
-      return series
+      return indices
     end
   end
 end

@@ -175,7 +175,9 @@ module Portfolio
 
         returns = GSL::Vector.alloc(series.size1)
         series.size1.times { |j|
-          v = series.row(j).map { |e| Math.exp(e) }.cumprod
+          row = series.row(j)
+          values = row.to_a.map { |i| lr.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
+          v = GSL::Vector[*values].cumprod
           returns[j] = (v[-1] ** (1.0/(periods / 250.0))) - 1 # annualize
         }
 
@@ -189,7 +191,9 @@ module Portfolio
 
       returns = GSL::Vector.alloc(series.size1)
       series.size1.times { |j|
-        v = series.row(j).map { |e| Math.exp(e) }.cumprod
+        row = series.row(j)
+        values = row.to_a.map { |i| @portfolio_log_returns.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
+        v = GSL::Vector[*values].cumprod
         returns[j] = (v[-1] ** (1.0/(periods / 250.0))) - 1 # annualize
       }
 
@@ -266,18 +270,21 @@ module Portfolio
       # given our current portfolio value and a series of log returns,
       # we need to come up with a series of portfolio values
 
+      return_series = GSL::Matrix.alloc(n, periods_forward)
+
       series.size1.times { |i|
         row = series.row(i)
-        row.map! { |e| Math.exp(e) } #convert to returns
-        series.set_row(i, initial_value * row.cumprod)
+        values = row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
+        v = GSL::Vector[*values].cumprod
+        return_series.set_row(i, initial_value * v)
       }
 
       # now, for each column, we need a mean and variance
-      means = GSL::Vector.alloc(series.size2)
-      upside_stddevs = GSL::Vector.alloc(series.size2)
-      downside_stddevs = GSL::Vector.alloc(series.size2)
-      series.size2.times { |i|
-        column = series.column(i)
+      means = GSL::Vector.alloc(return_series.size2)
+      upside_stddevs = GSL::Vector.alloc(return_series.size2)
+      downside_stddevs = GSL::Vector.alloc(return_series.size2)
+      return_series.size2.times { |i|
+        column = return_series.column(i)
         m = column.mean
         means[i] = m
 

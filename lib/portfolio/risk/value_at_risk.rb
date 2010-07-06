@@ -11,64 +11,52 @@ module Portfolio
       # 
       # See http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1535933
       def self.cornish_fisher(log_returns, days = 1, confidence_level=0.99)
-        series = Statistics::Bootstrap.block_bootstrap(log_returns, 1000)
+        block_size = 25
+        series = Statistics::Bootstrap.block_bootstrap(log_returns, 1250, 25)
 
         n = series.size1
-        
-        means = GSL::Vector.alloc(n)
-        variances = GSL::Vector.alloc(n)
-        skews = GSL::Vector.alloc(n)
-        kurtoses = GSL::Vector.alloc(n)
-
-        n.times { |i|
-          row = series.row(i)
-
-          #the row is daily log returns
-          #we need to take the cumsum then 'days' differences
-          cumulative = row.cumsum
-
-          m = cumulative.size
-          differences = cumulative.get(days, m-days) - cumulative.get(0, m-days)
-
-          means[i] = differences.mean
-          variances[i] = differences.variance_m(means[i])
-          #sd = Math.sqrt(variances[i])
-          skews[i] = differences.skew #FIX: skew(means[i], sd)
-          kurtoses[i] = differences.kurtosis #FIX: kurtosis(means[i], sd)
-        }
-
-        mean = means.mean
-        variance = variances.mean
-        skewness = skews.mean
-        kurtosis = kurtoses.mean
 
         # one sided tail
         z = Statistics2.pnormaldist(confidence_level)
 
-        # see http://www.riskglossary.com/link/cornish_fisher.htm
-        za = z + 
-             (1.0/6.0)*(z**2 - 1.0)*skewness +
-             (1.0/24.0)*(z**3 - 3.0*z)*kurtosis -
-             (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(skewness**2)
-        
-        var = 1.0 - Math.exp(mean - za * Math.sqrt(variance))
-
-        cvars = []
+        vars = GSL::Vector.alloc(n)
+        cvars = GSL::Vector.alloc(n)
         n.times { |i|
           row = series.row(i)
-          cumulative = row.cumsum
+          values = row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten
+          v = GSL::Vector[*values]
+
+          #the row is daily log returns
+          #we need to take the cumsum then 'days' differences
+          cumulative = v.cumsum
+
           m = cumulative.size
           differences = cumulative.get(days, m-days) - cumulative.get(0, m-days)
 
-          pct_differences = differences.map { |e| 1.0 - Math.exp(e) }
-          cvar_pct_differences = pct_differences.to_a.select { |e| e > var }
-          local_cvar = cvar_pct_differences.inject(0.0) { |s,v| s + v } / cvar_pct_differences.size
-          cvars << local_cvar unless local_cvar.nan?
+          mean = differences.mean
+          variance = differences.variance_m(mean)
+          #sd = Math.sqrt(variances[i])
+          skewness = differences.skew #FIX: skew(means[i], sd)
+          kurtosis = differences.kurtosis #FIX: kurtosis(means[i], sd)
+
+          # see http://www.riskglossary.com/link/cornish_fisher.htm
+          za = z +
+               (1.0/6.0)*(z**2 - 1.0)*skewness +
+               (1.0/24.0)*(z**3 - 3.0*z)*kurtosis -
+               (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(skewness**2)
+
+          left_tail_cutoff = mean - za * Math.sqrt(variance)
+          vars[i] = 1.0 - Math.exp(left_tail_cutoff)
+
+          left_tail = differences.to_a.select { |e| e < left_tail_cutoff }
+          if left_tail.size == 0
+            cvars[i] = vars[i]
+          else
+            cvars[i] = 1.0 - Math.exp(GSL::Vector[*left_tail].mean)
+          end
         }
 
-        cvar = cvars.inject(0.0) { |s,v| s + v } / cvars.size
-
-        return {:var => var, :cvar => cvar}
+        return {:var => vars.mean, :cvar => cvars.mean}
       end
 
       # See "HotSpots and Hedges" paper by Litterman, Goldman Sachs
@@ -101,7 +89,7 @@ module Portfolio
 
         vars = GSL::Vector.alloc(n)
         cvars = GSL::Vector.alloc(n)
-        0.upto(n-1) { |i|
+        n.times { |i|
           Status.info("Computing VaR for #{portfolio_state.tickers[i]} (#{i+1}/#{n})")
           value_at_risk = cornish_fisher(returns.row(i), days)
           vars[i] =  value_at_risk[:var]

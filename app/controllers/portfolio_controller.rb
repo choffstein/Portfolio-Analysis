@@ -843,7 +843,6 @@ class PortfolioController < ApplicationController
               # and for each column in our correlation matrix,
               # solve for our betas.  find the max beta, and use that as
               # our identified dimension
-
               c, cov, chisq, status = GSL::MultiFit::linear(eigen_vectors.transpose, portfolio_state.sample_correlation_matrix.column(i))
               identified_dimension[i] = (c * sqrt_variance).map {|e| e.abs }.sort_index[-1]
             }
