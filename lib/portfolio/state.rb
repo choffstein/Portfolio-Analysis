@@ -222,7 +222,7 @@ module Portfolio
     def return_monte_carlo(periods_forward = 250, n = 10000, block_size = 10)
       Status.info("Performing return monte-carlo simulation on portfolio")
       return monte_carlo(self.to_log_returns, compute_current_portfolio_value,
-                          periods_forward, n, block_size, 0.9999)
+                          periods_forward, n, block_size, 1.0)
     end
 
     def current_portfolio_value
@@ -360,15 +360,45 @@ module Portfolio
     def compute_sample_correlation_matrix
       Status.info("Computing correlation matrix")
       begin
-        @sample_correlation_matrix = GSL::Matrix.alloc(@tickers.size, @tickers.size)
-        0.upto(@tickers.size-1) { |i|
-          i.upto(@tickers.size-1) { |j|
+        n = @tickers.size
+        @sample_correlation_matrix = GSL::Matrix.alloc(n, n)
+        n.times { |i|
+          i.upto(n-1) { |j|
             corr = @sample_covariance_matrix[i,j] /
               Math.sqrt(@sample_covariance_matrix[i,i] * @sample_covariance_matrix[j,j])
             @sample_correlation_matrix[i,j] = corr
             @sample_correlation_matrix[j,i] = corr #symmetric matrix
           }
         }
+
+
+        # here, we need to apply changes to the sample correlation matrix
+        # to converge to the nearest stable correlation matrix
+        #
+        # Properties of correlation matrix
+        #
+        # symmetric
+        # 1s on the diagonal
+        # off-diagonal elements between −1 and 1
+        # eigenvalues nonnegative
+        #       
+
+        s = GSL::Matrix.alloc(n,n).set_all(0.0)
+        yk = @sample_correlation_matrix
+        50.times {
+          rk = yk - s
+
+          lambda, q = rk.eigen_symmv
+          lambda = GSL::Matrix.diagonal(lambda.map { |e| [e, 0.0].max })
+
+          xk = q * lambda * q.transpose
+          s = xk - rk
+          xk.diagonal.set_all(1.0) #set diagonals to 1
+          
+          yk = xk
+        }
+        @sample_correlation_matrix = yk
+        
       end unless !@sample_correlation_matrix.nil?
     end
 

@@ -98,25 +98,14 @@ module Portfolio
         vars = vars #* total_holdings
         cvars = cvars #* total_holdings
 
-        # see how much each var contributes to the overall portfolio
-        # we use the covariance matrix to incorporate the overlap
-        Status.info('Computing Risk Composition')
-        covariance_matrix = portfolio_state.covariance_matrix.map { |e| Math.exp(e)-1 }
-        risks = GSL::Vector.alloc(n)
-        n.times { |i|
-          risks[i] = vars[i]
-          n.times { |j|
-            risks[i] += vars[j] * covariance_matrix[i,j] unless i == j
-          }
-        }
-        
+        marginal_vars = beta * portfolio_var
         return {
           :portfolio_var => portfolio_var,
           :portfolio_cvar => portfolio_cvar,
           :individual_vars => vars,
           :individual_cvars => cvars,
-          :proportion_of_var => risks / risks.abs.sum,
-          :marginal_vars => beta * portfolio_var #/ total_portfolio_value
+          :component_vars => portfolio_state.weights.col * marginal_vars.col,
+          :marginal_vars =>  marginal_vars
         }
       end
     end

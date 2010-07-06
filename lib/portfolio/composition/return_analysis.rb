@@ -71,7 +71,7 @@ module Portfolio
 
         raise "Not enough information to analyze" if dates.size < window_size
             
-        n = (dates.size - window_size) / sampling_period
+        n = ((dates.size - window_size) / sampling_period).floor
         
         betas = GSL::Matrix.alloc(factors.size, n)
         r2 = []
@@ -137,19 +137,20 @@ module Portfolio
       def self.pca(portfolio_state)
         # we prefer to use an svd over eigenvalue decomposition since the
         # svd produces orthonormal basis
-        u, v, s = portfolio_state.sample_correlation_matrix.SV_decomp
+        #u, v, s = portfolio_state.sample_correlation_matrix.SV_decomp
         #u*Matrix.diagonal(s)*v.trans = portfolio_state.sample_correlation_matrix
 
         #Rails.logger.info(s)
         #Rails.logger.info(s.abs / s.abs.sum)
         #Rails.logger.info(v*GSL::Matrix.diagonal(s).transpose)
-        return [s, s.abs / s.abs.sum, v*GSL::Matrix.diagonal(s).transpose]
+        #return [s, s.abs / s.abs.sum, v*GSL::Matrix.diagonal(s).transpose]
 
         #compute the eigen-vals and eigen-vects
-        #eigen_values, eigen_vectors = portfolio_state.sample_correlation_matrix.eigen_symmv
-        #percent_variance = eigen_values.abs / eigen_values.abs.sum
+        eigen_values, eigen_vectors = portfolio_state.sample_correlation_matrix.eigen_symmv
+        eigen_values.map! { |e| [e, 0.0].max }
+        percent_variance = eigen_values.abs / eigen_values.abs.sum
 
-        #return [eigen_values, percent_variance, eigen_vectors]
+        return [eigen_values, percent_variance, eigen_vectors]
       end
     end
   end
