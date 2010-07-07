@@ -10,7 +10,6 @@ module Portfolio
       
       n = portfolio_returns.size
       steps = ((n-window)/step_size).floor
-      Rails.logger.info(steps)
       marginal_contributions = GSL::Matrix.alloc(factor_returns.size1, steps)
 
       factor_returns.size1.times { |i|

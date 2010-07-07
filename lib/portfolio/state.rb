@@ -128,14 +128,21 @@ module Portfolio
         
     #compute the portfolio log return vector
     def to_log_returns
-      Status.info("Creating portfolio log returns")
       #shouldn't really need this...
       compute_log_returns unless !@log_returns.nil?
       compute_weights unless !@weights.nil?
       
       begin
+
+        Status.info("Creating portfolio log returns")
+        portfolio_value = self.portfolio_value_over_time
+        n = portfolio_value.size
+        log_portfolio_value = portfolio_value.map { |e| Math.log(e) }
+
         # using @log_returns,
-        @portfolio_log_returns = @weights * @log_returns
+        @portfolio_log_returns = log_portfolio_value.get(1,n-1) -
+                                              log_portfolio_value.get(0,n-1)
+
       end unless !@portfolio_log_returns.nil?
       
       return @portfolio_log_returns
@@ -236,7 +243,7 @@ module Portfolio
 
         @dates.size.times { |t|
           @tickers.size.times { |i|
-            @portfolio_value += @number_of_shares[i] *
+            @portfolio_value[t] += @number_of_shares[i] *
                                           @time_series[@tickers[i]][@dates[t]]
           }
         }
@@ -258,6 +265,24 @@ module Portfolio
         
       end if @weights_over_time.nil?
       return @weights_over_time
+    end
+
+    def expected_volatility(days = 250)
+      block_size = 10
+      log_returns = self.to_log_returns
+      series = Statistics::Bootstrap::block_bootstrap(log_returns,
+                                            days.to_i, block_size, 10000, 0.9999)
+
+      volatilities = GSL::Vector.alloc(series.size1)
+      series.size1.times { |j|
+        row = series.row(j)
+
+        values = GSL::Vector[*(row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten.map)]
+        annual_variance = Math.sqrt(values.variance / (1.0 / days)) #daily variance
+        volatilities[j] = Math.exp(annual_variance) - 1.0
+      }
+
+      return volatilities.mean
     end
     
     private
@@ -329,12 +354,12 @@ module Portfolio
       Status.info("Computing log returns")
       begin
         @log_returns = GSL::Matrix.alloc(@tickers.size, @dates.size-1)
-        0.upto(@tickers.size-1) { |i|
+        @tickers.size.times { |i|
           ticker = @tickers[i]
+          ts = @time_series[ticker]
           1.upto(@dates.size-1) { |d|
             #OPTIMIZE: Possible optimization -- cache the computed log value?
-            @log_returns[i,d-1] = Math.log(@time_series[ticker][@dates[d]]) -
-                                  Math.log(@time_series[ticker][@dates[d-1]])
+            @log_returns[i,d-1] = Math.log(ts[@dates[d]]) - Math.log(ts[@dates[d-1]])
           }
         }
       end unless !@log_returns.nil?
@@ -384,8 +409,10 @@ module Portfolio
         #       
 
         s = GSL::Matrix.alloc(n,n).set_all(0.0)
-        yk = @sample_correlation_matrix
-        50.times {
+        xk = @sample_correlation_matrix
+        yk = nil
+        begin
+          yk = xk
           rk = yk - s
 
           lambda, q = rk.eigen_symmv
@@ -395,9 +422,9 @@ module Portfolio
           s = xk - rk
           xk.diagonal.set_all(1.0) #set diagonals to 1
           
-          yk = xk
-        }
-        @sample_correlation_matrix = yk
+        end while (xk - yk).norm > 1e-12
+        
+        @sample_correlation_matrix = xk
         
       end unless !@sample_correlation_matrix.nil?
     end

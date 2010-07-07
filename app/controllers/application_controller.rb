@@ -15,10 +15,11 @@ class ApplicationController < ActionController::Base
     end
   end
 
+
   def random_colors(n)
     colors = []
     step = 360.0 / n
-    
+
     n.times { |i|
       r, g, b = hsv_to_rgb(step*i + rand*step/2, 0.5, 0.9)
       r = (r*255).floor

@@ -62,20 +62,10 @@
     <td>Correlation Analysis</td>
     <td align="center"><div id="correlation_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :correlation_analysis},
+        :url => {:action => :render_correlation_analysis},
         :loading => "start_xhr('correlation_results')",
         :complete => "stop_xhr('correlation_results')",
         :update => 'correlation_results' %>
-    </td>
-  </tr>
-  <tr>
-    <td>Risk vs Return Breakdown</td>
-    <td align="center"><div id="risk_vs_return_results" style="visibility:hidden">
-      </div><%= link_to_remote "Run",
-        :url => {:action => :risk_to_return},
-        :loading => "start_xhr('risk_vs_return_results')",
-        :complete => "stop_xhr('risk_vs_return_results')",
-        :update => 'risk_vs_return_results' %>
     </td>
   </tr>
 
@@ -83,7 +73,7 @@
     <td>Contribution to Portfolio Volatility</td>
     <td align="center"><div id="volatlity_analysis_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :volatility_analysis},
+        :url => {:action => :render_volatility_analysis},
         :loading => "start_xhr('volatlity_analysis_results')",
         :complete => "stop_xhr('volatlity_analysis_results')",
         :update => 'volatlity_analysis_results' %>
@@ -91,12 +81,12 @@
   </tr>
   
   <tr>
-    <td>Value-at-Risk Decomposition</td>
+    <td>Annual Value-at-Risk Decomposition</td>
     <td align="center">
       <div id="var_decomposition" style="visibility:hidden"></div>
       <div id="20_day_risk_results"></div>
       <%= link_to_remote "Run",
-        :url => {:action => :risk_decomposition, :days => 20},
+        :url => {:action => :render_risk_decomposition, :days => 250},
         :loading => "start_xhr('var_decomposition'); hidden_specific('20_day_risk_results')",
         :complete => "stop_xhr('var_decomposition'); visible_specific('20_day_risk_results')",
         :update => 'var_decomposition' %>
@@ -106,7 +96,7 @@
     <td>Return Projection (Monte-Carlo Simulation)</td>
     <td align="center"><div id="return_mc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :return_monte_carlo},
+        :url => {:action => :render_return_monte_carlo},
         :loading => "start_xhr('return_mc_results')",
         :complete => "stop_xhr('return_mc_results')",
         :update => 'return_mc_results' %>
@@ -117,7 +107,7 @@
     <td>Income Projection (Monte-Carlo Simulation)</td>
     <td align="center"><div id="income_mc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :income_monte_carlo},
+        :url => {:action => :render_income_monte_carlo},
         :loading => "start_xhr('income_mc_results')",
         :complete => "stop_xhr('income_mc_results')",
         :update => 'income_mc_results' %>
@@ -127,7 +117,7 @@
     <td>Sector Allocation</td>
     <td align="center"><div id="sector_allocation_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :sector_allocation},
+        :url => {:action => :render_sector_allocation},
         :loading => "start_xhr('sector_allocation_results')",
         :complete => "stop_xhr('sector_allocation_results')",
         :update => 'sector_allocation_results' %>
@@ -137,7 +127,7 @@
     <td>Sector Return Deomposition</td>
     <td align="center"><div id="sector_rc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :sector_return_decomposition},
+        :url => {:action => :render_sector_return_decomposition},
         :loading => "start_xhr('sector_rc_results')",
         :complete => "stop_xhr('sector_rc_results')",
         :update => 'sector_rc_results' %>
@@ -159,7 +149,7 @@
     <td>Rate & Credit Sensitivity Analysis</td>
     <td align="center"><div id="rate_and_credit_rc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :rate_return_sensitivity},
+        :url => {:action => :render_rate_return_sensitivity},
         :loading => "start_xhr('rate_and_credit_rc_results')",
         :complete => "stop_xhr('rate_and_credit_rc_results')",
         :update => 'rate_and_credit_rc_results' %>
@@ -170,7 +160,7 @@
     <td>Asset Return Decomposition</td>
     <td align="center"><div id="asset_rc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :asset_return_decomposition},
+        :url => {:action => :render_asset_return_decomposition},
         :loading => "start_xhr('asset_rc_results')",
         :complete => "stop_xhr('asset_rc_results')",
         :update => 'asset_rc_results' %>
@@ -181,7 +171,7 @@
     <td>3-Month Up/Down Capture Analysis</td>
     <td align="center"><div id="up_down_capture_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :up_down_capture},
+        :url => {:action => :render_up_down_capture},
         :loading => "start_xhr('up_down_capture_results')",
         :complete => "stop_xhr('up_down_capture_results')",
         :update => 'up_down_capture_results' %>
@@ -192,7 +182,7 @@
     <td>Portfolio Dimensionality</td>
     <td align="center"><div id="eigen_value_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :eigen_value_decomposition},
+        :url => {:action => :render_dimensionality_analysis},
         :loading => "start_xhr('eigen_value_results')",
         :complete => "stop_xhr('eigen_value_results')",
         :update => 'eigen_value_results' %>
