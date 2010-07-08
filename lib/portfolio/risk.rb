@@ -60,23 +60,19 @@ module Portfolio
         portfolio_up = 1
         benchmark_down = 1
         portfolio_down = 1
-        benchmark_returns.each { |b|
+        benchmark_returns.zip(portfolio_returns).each { |b,p|
           if b > 1
             benchmark_up = benchmark_up * b
-          else
-            benchmark_down = benchmark_down * b
-          end
-        }
-
-        portfolio_returns.each { |p|
-          if p > 1
             portfolio_up = portfolio_up * p
           else
+            benchmark_down = benchmark_down * b
             portfolio_down = portfolio_down * p
           end
         }
 
-        capture_ratio = [(portfolio_down - 1.0) / (benchmark_down - 1.0),
+        p_dn = portfolio_down - 1.0
+        b_dn = benchmark_down - 1.0
+        capture_ratio = [ (1.0/(1.0 + p_dn) - 1.0) / (1.0/(1.0 + b_dn) - 1.0),
                               (portfolio_up - 1.0) / (benchmark_up - 1.0)]
         return [capture_ratio]
         
@@ -91,23 +87,35 @@ module Portfolio
           portfolio_up = 1
           benchmark_down = 1
           portfolio_down = 1
-          benchmark_window.each { |b|
+
+          window.times { |i|
+            b = benchmark_window[i]
+            p = portfolio_window[i]
             if b > 1
               benchmark_up = benchmark_up * b
-            else
-              benchmark_down = benchmark_down * b
-            end
-          }
-
-          portfolio_window.each { |p|
-            if p > 1
               portfolio_up = portfolio_up * p
             else
+              benchmark_down = benchmark_down * b
               portfolio_down = portfolio_down * p
             end
           }
 
-          capture_ratios << [(portfolio_down - 1.0) / (benchmark_down - 1.0),
+          # instead of just comparing % down, here, we identify the logarithmic
+          # property of returns and losses, where a 50% loss requires a
+          # 100% return.  So if our manager is down 20% and the market is down
+          # 40%, we don't want to say we were only captured 50% downside.
+          # We want to say we require only
+          # 
+          #    (1 / (1 - 0.2) - 1) / (1 / 1 - 0.5) - 1) = 25%
+          #
+          # of what the market requires to get back to parity
+          #
+          # so we reward managers who avoid losses more than those who match
+          # upside but capture all of the downside.  
+
+          p_dn = portfolio_down - 1.0
+          b_dn = benchmark_down - 1.0
+          capture_ratios << [ (1.0/(1.0 + p_dn) - 1.0) / (1.0/(1.0 + b_dn) - 1.0),
                               (portfolio_up - 1.0) / (benchmark_up - 1.0)]
         }
         return capture_ratios

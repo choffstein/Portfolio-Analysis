@@ -95,16 +95,17 @@ module Portfolio
           vars[i] =  value_at_risk[:var]
           cvars[i] = value_at_risk[:cvar]
         }
-        vars = vars #* total_holdings
-        cvars = cvars #* total_holdings
+        #vars = vars * total_holdings
+        #cvars = cvars * total_holdings
 
-        marginal_vars = beta * portfolio_var
+        marginal_vars = beta * portfolio_var #/ total_portfolio_value
+        
         return {
           :portfolio_var => portfolio_var,
           :portfolio_cvar => portfolio_cvar,
           :individual_vars => vars,
           :individual_cvars => cvars,
-          :component_vars => portfolio_state.weights.col * marginal_vars.col,
+          :component_vars => portfolio_state.weights.col * marginal_vars, # * marginal_vars.col
           :marginal_vars =>  marginal_vars
         }
       end

@@ -11,11 +11,12 @@ class PortfolioController < ApplicationController
     if request.post?
       #Rails.logger.info(params)
       session[:portfolio] = DataFile.new(params[:portfolio])
+      session[:portfolio].tickers.map! { |t| t.upcase }
       redirect_to :action => :analyze
     end
   end
 
-  def run_report
+  def render_report
     if session[:portfolio].nil?
       render :text => "Please upload portfolio first"
     else
@@ -28,20 +29,20 @@ class PortfolioController < ApplicationController
       offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
       state = state.slice(offset) # 5 years
 
-      # color_coded_correlation, ipc, filename
-      correlation_analysis(sliced_state)
+      # color_coded_correlation, file_name, score
+      cor_results = correlation_analysis(state)
 
       # expected_volatility, file_name, marginal_contributions
-      volatility_analysis(state)
+      v_results = volatility_analysis(state)
 
       # file_name
-      return_monte_carlo(state)
+      rmc_results = expected_return_monte_carlo(state)
           
       # file_name
-      income_monte_carlo(state)
+      imc_results = income_monte_carlo(state)
 
       # file_names
-      sector_allocation_analysis(state)
+      sa_results = sector_allocation_analysis(state)
 
       # portfolio_var, portfolio_cvar
       # holding_vars
@@ -50,25 +51,221 @@ class PortfolioController < ApplicationController
       #     component_var
       #     proportion_var
       #     marginal_var
-      risk_decomposition_analysis(state)
+      # file_name
+      # score
+      rd_results = risk_decomposition_analysis(state)
 
       # file_names
-      sector_return_decomposition(state)
+      sec_results = sector_return_decomposition(state)
 
       # file_name
-      style_return_decomposition(state)
+      sr_results = style_return_decomposition(state)
 
       # file_name
-      rate_return_sensitivity(state)
+      rs_results = rate_return_sensitivity(state)
 
       # file_names
-      asset_return_decomposition(state)
+      ar_results = asset_return_decomposition(state)
 
-      # file_name
-      up_down_capture(state)
+      # file_name, score
+      ud_results = up_down_capture(state)
 
-      # identified_clusters, num_unique_clusters
-      dimensionality_analysis(state)
+      # identified_clusters, num_unique_clusters, file_name, score
+      dim_results = dimensionality_analysis(state)
+
+      cluster_colors = random_colors(dim_results[:num_unique_clusters])
+
+      pdf_handle = "public/report.pdf"
+      Prawn::Document.generate(pdf_handle,
+        :page_layout => :landscape,
+        :info => {
+          :Title => "Portfolio Analysis",
+          :Author => "Newfound Research, LLC",
+          :Subject => "Portfolio Decomposition",
+          :Creator => "Newfound Research, LLC",
+          :CreationDate => Time.now
+        } ) do
+
+        font 'Helvetica'
+        self.font_size = 8
+        repeat :all do
+          draw_text "Copyright Newfound Research, LLC", :at => bounds.top_left
+        end
+
+        
+        self.font_size = 32
+        move_down 175
+        text "Newfound Portfolio Diagnotistics", :align => :center
+
+        self.font_size = 8
+        move_down 100
+        font 'Helvetica', :style => :bold
+        text "Limitation of Liability"
+        font 'Helvetica'
+        text "This data is not intended to provide any investment or related advice, and is not intended to serve as an offer to sell any security or any other investment product or service."
+
+        font 'Helvetica', :style => :bold
+        text "\nInformation Provided \"As Is\""
+        font 'Helvetica'
+        text "Information is provided AS IS without any express or implied warranty of any kind."
+        
+        font 'Helvetica', :style => :bold
+        text "\nNo Investment Advice or Offer"
+        font 'Helvetica'
+        text "None of Newfound Research, its directors, officers, employees, agents or affiliates shall be responsible for any claims, losses, liability, costs or other damages, including but not limited to trading losses or lost profits (whether direct, indirect, consequential, incidental or special), that result from the use of this information, or a disruption in such use, even if Newfound Research has been notified of the possibility of such claims, losses, costs or other damages. Some states and other jurisdictions may prohibit certain limitations of liability, so this may not apply to you."
+
+        ####### PORTFOLIO INFORMATION
+
+        start_new_page
+        self.font_size = 32
+        move_down 175
+        text "Analysis of Portfolio", :align => :center
+
+
+        start_new_page
+
+        move_down 10
+        self.font_size = 16
+        text "Correlation Analysis"
+        move_down 10
+
+        self.font_size = 8
+        # generate our rows
+        rows = []
+        rows << [""] + tickers
+        tickers.each { |t1|
+          row = []
+          row << t1
+          tickers.each { |t2|
+            row << (((cor_results[:color_coded_correlation][t1][t2][:correlation] * 100).to_i)/100.0).to_s
+          }
+          rows << row
+        }
+
+        table(rows,
+                :cell_style => { :padding => 3 },
+                :header => true,
+                :width => bounds.width) do
+          cells.borders = []
+          # Use the row() and style() methods to select and style a row.
+
+          row(0).style(:style => :bold, :background_color => 'cccccc')
+          column(0).style(:style => :bold, :background_color => 'cccccc')
+          row(0).column(0).style(:background_color => 'ffffff')
+                    
+          tickers.each_with_index { |t1,i|
+            tickers.each_with_index { |t2,j|
+              row(i+1).column(j+1).style(:background_color => cor_results[:color_coded_correlation][t1][t2][:color])
+            }
+          }
+
+          columns(1..tickers.size).style(:align => :center)
+          
+        end
+
+        move_down 20
+        self.font_size = 13
+        text "Diversification Score", :align => :center
+        img_handle = "#{RAILS_ROOT}/public/images/#{cor_results[:file_name]}"
+        image img_handle
+
+        start_new_page
+        move_down 10
+        self.font_size = 16
+        text "Portfolio Statistics"
+        move_down 10
+        self.font_size = 8
+        text "Annual Expected Portfolio Variance: #{(v_results[:expected_volatility]*10000).to_i/100.0}%"
+        text "Annual Portfolio Value-at-Risk: #{(rd_results[:portfolio_var]*10000).to_i/100.0}%"
+        text "Annual Portfolio Conditional Value-at-Risk: #{(rd_results[:portfolio_cvar]*10000).to_i/100.0}%"
+
+        move_down 10
+        self.font_size = 13
+        text "Daily Projection of Portfolio Value (Monte-Carlo Simulation)"
+        img_handle = "#{RAILS_ROOT}/public/images/#{rmc_results[:file_name]}"
+        image img_handle
+
+        move_down 10
+        text "Quarterly Projection of Portfolio Income (Monte-Carlo Simulation)"
+        img_handle = "#{RAILS_ROOT}/public/images/#{imc_results[:file_name]}"
+        image img_handle
+        
+        start_new_page
+        
+        ####### HOLDING INFORMATION
+
+        start_new_page
+      self.font_size = 8
+        headers = ["Name", "Ticker", "Sector", "Shares", "Value", "Weight",
+                   "Marginal\nVolatility", "VaR", "CVaR",
+                   "Marginal VaR", "Risk Allocation",
+                   "Marginal Diversification\n(per 100 bp change in weight)"]
+
+        rows = []
+        tickers.each_with_index {|ticker, i|
+
+          correlation_matrix = state.sample_correlation_matrix.clone.to_a
+          correlation_matrix.delete_at(i) #delete the ith row
+          correlation_matrix.each { |a| a.delete_at(i) } #delete the ith column too
+          
+          correlation_matrix = GSL::Matrix[*correlation_matrix]
+
+          weights = state.weights.clone
+          weights.delete_at(i)
+          weights = weights / weights.abs.sum #recompute weights
+
+          indiv_ipc = weights * correlation_matrix * weights.col
+          indiv_ipc = (1.0 - (indiv_ipc - weights * weights.col)) / 2.0
+
+
+          #Rails.logger.info(cor_results[:score] - indiv_ipc)
+
+          rows << [state.companies[ticker].name, 
+                  ticker,
+                  state.companies[ticker].sector,
+                  shares[i].to_s,
+                  "$#{(shares[i] * state.time_series[ticker][state.dates[-1]]).to_s}",
+                  "#{((state.weights[i]*10000).to_i / 100.0).to_s}%",
+                  "#{(((v_results[:marginal_contributions][ticker] * 100).to_i)/100.0).to_s} bp",
+                  "#{((rd_results[:holding_vars][ticker][:individual_var] * 10000).to_i / 100.0).to_s}%",
+                  "#{((rd_results[:holding_vars][ticker][:individual_cvar] * 10000).to_i / 100.0).to_s}%",
+                  "#{((rd_results[:holding_vars][ticker][:marginal_var] * 10000).to_i / 100.0).to_s} bp",
+                  "#{((rd_results[:holding_vars][ticker][:proportion_var] * 10000).to_i / 100.0).to_s}%",
+                  "#{((((cor_results[:score] - indiv_ipc) / (state.weights[i])) * 100).to_i / 100.0).to_s}"]
+ 
+        }
+
+        self.font_size = 32
+        move_down 175
+        text "Analysis of Holdings", :align => :center
+
+        start_new_page
+
+        self.font_size = 8
+        move_down 10
+        table([headers] + rows,
+                :cell_style => { :padding => 3 },
+                :header => true,
+                :width => bounds.width) do
+          cells.borders = []
+          # Use the row() and style() methods to select and style a row.
+          row(0).style(:style => :bold, :background_color => 'cccccc')
+          tickers.each_with_index { |ticker,i|
+            row(i+1).style(:background_color => cluster_colors[dim_results[:identified_clusters][ticker]])
+          }
+          columns(1...headers.size).style(:align => :center)
+        end
+
+        ######## DESCRIPTION OF METHODOLOGY & TERMS
+        start_new_page
+        move_down 50
+        text "* Marginal Volatility is ...\n** Marginal Value-at-Risk is ..."
+
+        self.font_size = 8
+        number_pages "<page>", bounds.bottom_right #, :align => :right
+      end
+
+      render :inline => "<a href='/report.pdf'>Download</a>"
     end
   end
 
@@ -89,26 +286,29 @@ class PortfolioController < ApplicationController
           inline_renderable = "<table width=#{tickers.size*10} height=#{tickers.size*10} border=0>"
           inline_renderable += "<tr><td></td>"
           tickers.each { |t|
-            inline_renderable += "<td><font size=\"#{font_size}\"><b>#{t.upcase}</b></font></td>"
+            inline_renderable += "<td><font size=\"#{font_size}\"><b>#{t.gsub('-', '.').upcase}</b></font></td>"
           }
           inline_renderable += "<tr>"
 
+          offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
+          sliced_state = state.slice(offset) # 5 years
+
           # color_coded_correlation, ipc, filename
-          results = correlation_analysis(state)
+          results = correlation_analysis(sliced_state)
 
           tickers.each { |t1|
             inline_renderable += "<tr>"
-            inline_renderable += "<td><font size=\"#{font_size}\"><b>#{t1.upcase}</b></font></td>"
+            inline_renderable += "<td><font size=\"#{font_size}\"><b>#{t1.gsub('-', '.').upcase}</b></font></td>"
             tickers.each { |t2|
-              color = results[:color_coded_correlation][t1.downcase][t2.downcase][:color]
-              correlation = results[:color_coded_correlation][t1.downcase][t2.downcase][:correlation]
-              clamped = correlation * 100 / 100
+              color = results[:color_coded_correlation][t1][t2][:color]
+              correlation = results[:color_coded_correlation][t1][t2][:correlation]
+              clamped = (correlation * 100).to_i / 100.0
               inline_renderable += "<td bgcolor=\"#{color}\"><font size=\"#{font_size}\">#{clamped}</font></td>"
             }
             inline_renderable += "</tr>"
           }
 
-          ipc_pct = results[:ipc]
+          ipc_pct = results[:score]
 
           inline_renderable += "</table>"
           inline_renderable += "<br/><b>IPC:</b> #{100*ipc_pct}%<br/>"
@@ -141,12 +341,10 @@ class PortfolioController < ApplicationController
           inline_renderable += "<%= image_tag '#{results[:file_name]}' %><br/><br/>"
 
           marginal_contributions = results[:marginal_contributions]
-          num_columns = marginal_contributions.size2
-          current_marginal_contributions = marginal_contributions.column(num_columns-1).to_a
 
           inline_renderable += "<h3>Marginal Contribution to Volatility</h3>"
           tickers.each_with_index { |ticker, i|
-            inline_renderable += "<b>#{ticker}</b>: #{current_marginal_contributions[i]*1000}<br/>"
+            inline_renderable += "<b>#{ticker}</b>: #{marginal_contributions[ticker]}<br/>"
           }
 
           render :inline => inline_renderable
@@ -246,10 +444,12 @@ class PortfolioController < ApplicationController
             inline_renderable += "<b>#{ticker}</b>: #{results[:holding_vars][ticker][:individual_cvar]}<br/>"
           }
 
-          inline_renderable += "<br/><h3>Component VaRs</h3><br/>"
+          inline_renderable += "<br/><h3>Proportion of Portfolio VaR</h3><br/>"
           tickers.each { |ticker|
-            inline_renderable += "<b>#{ticker}</b>: #{results[:holding_vars][ticker][:component_var]} -- #{results[:holding_vars][ticker][:proportion_var]}<br/>"
+            inline_renderable += "<b>#{ticker}</b>: #{results[:holding_vars][ticker][:proportion_var]}<br/>"
           }
+
+          inline_renderable += "<br/><%= image_tag '#{results[:file_name]}' %>"
 
           inline_renderable += "<br/><h3>Marginal VaRs</h3><br/>"
           tickers.each { |ticker|
@@ -275,7 +475,7 @@ class PortfolioController < ApplicationController
         offset = (state.dates.size - 1250) < 0 ? 0 : (state.dates.size - 1250)
         sliced_state = state.slice(offset) # ~5 years
 
-        results = sector_return_decomposition(state)
+        results = sector_return_decomposition(sliced_state)
 
         render :inline => "<%= image_tag '#{results[:file_names][0]}' %><br/><%= image_tag '#{results[:file_names][1]}' %>"
       }
@@ -297,7 +497,7 @@ class PortfolioController < ApplicationController
 
         results = style_return_decomposition(sliced_state)
           
-        render :inline => "<%= image_tag '#{results[:file_name]} %>"
+        render :inline => "<%= image_tag '#{results[:file_name]}' %>"
       }
     end
   end
@@ -355,8 +555,12 @@ class PortfolioController < ApplicationController
         sliced_state = state.slice(offset) # ~5 years
 
         results = up_down_capture(sliced_state)
+
+        inline_renderable = "<%= image_tag '#{results[:file_names][0]}' %>"
+        inline_renderable += "<br/>% Area Above: #{results[:score]}"
+        inline_renderable += "<br/><%= image_tag '#{results[:file_names][1]}' %>"
           
-        render :inline => "<%= image_tag '#{results[:file_name]}' %>"
+        render :inline => inline_renderable
       }
     end
   end
@@ -380,13 +584,16 @@ class PortfolioController < ApplicationController
           portfolio_state = state.slice(offset) # ~5 years
 
           results = dimensionality_analysis(portfolio_state)
-           
+
+          #Rails.logger.info(results[:identified_clusters])
           results[:num_unique_clusters].times { |i|
             inline_renderable += "<b>Cluster #{i+1}</b>: "
-            inline_renderable += results[:identified_clusters].select { |k,v| v == i }.join(" ")
+            inline_renderable += results[:identified_clusters].select { |k,v| v == i }.map { |k,v| k }.join(" ")
             inline_renderable += "<br/>"
           }
-          inline_renderable += "<br/>"
+          inline_renderable += "<br/><b>Wealth Distribution Across Clusters:"
+
+          inline_renderable += "<br/><%= image_tag '#{results[:file_name]}' %>"
  
           render :inline => inline_renderable
         end
@@ -422,23 +629,23 @@ class PortfolioController < ApplicationController
 
     ipc_pct = (1.0 - ipc)/2.0
     #weird fucking hack to get the http get to go through ... requires a newline?!
-    image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@a,000000,1,#{ipc_pct}:.5,7,0
+    image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@f#{(ipc_pct*10000).to_i / 100.0},000000,1,#{ipc_pct}:.5,16,0
       ")
 
-    file_name = "portfolio/heat_chart.png"
+    file_name = "portfolio/correlation_heat_chart.png"
     File.open("public/images/#{file_name}", "w") { |f|
       f << image
     }
 
     return {
       :color_coded_correlation => color_coded_correlation,
-      :ipc => ipc_pct,
+      :score => ipc_pct,
       :file_name => file_name
     }
   end
 
   def volatility_analysis(state)
-    window_size = 250
+    window_size = 125
     sampling_period = 20
     tickers = state.tickers
 
@@ -476,8 +683,7 @@ class PortfolioController < ApplicationController
     file_name = "portfolio/percent_contribution"
     sa.write_to("public/images/#{file_name}")
 
-    expected_volatility = sliced_state.expected_volatility
-
+    expected_volatility = state.expected_volatility
 
     ncol = marginal_contributions.size2
     current_marginal_contributions = marginal_contributions.column(ncol-1).to_a
@@ -618,8 +824,6 @@ class PortfolioController < ApplicationController
       'Technology',
       'Utilities']
 
-    colors = random_colors(available_sectors.size)
-
     tickers.each { |ticker|
       company = Company.new({:ticker => ticker.downcase})
 
@@ -630,11 +834,14 @@ class PortfolioController < ApplicationController
       end
     }
 
+    colors = random_colors(sector_hash.size)
+
     i = 0
     pc = GoogleChart::PieChart.new
     sector_hash.keys.sort.each { |k|
-      clamped = ((sector_hash[k] / tickers.size.to_f) * 10000).to_i / 10000.0
-      pc.data "#{k} (#{sector_hash[k].to_i} at #{clamped*100}%)", sector_hash[k], colors[i]
+      clamped = ((sector_hash[k] / tickers.size.to_f) * 10000).to_i / 100.0
+      #Rails.logger.info(sector_hash[k])
+      pc.data "#{k} (#{sector_hash[k].to_i} at #{clamped}%)", sector_hash[k], colors[i]
       i = i + 1
     }
     pc.height = 300
@@ -661,19 +868,36 @@ class PortfolioController < ApplicationController
 
     risks = {}
 
-    tickers.each_with_index { |ticker, i|
+    cc = 0.0
+    state.tickers.each_with_index { |ticker, i|
       risks[ticker] ||= {}
       risks[ticker][:individual_var] = individual_vars[i]
       risks[ticker][:individual_cvar] = individual_cvars[i]
       risks[ticker][:component_var] = component_vars[i]
       risks[ticker][:proportion_var] = component_vars[i] / portfolio_var
+
+      cc = cc + risks[ticker][:proportion_var] ** 2
       risks[ticker][:marginal_var] = marginal_vars[i]
     }
 
+    cc = 1.0 / cc
+    cc = cc / state.tickers.size
+
+    #weird fucking hack to get the http get to go through ... requires a newline?!
+    image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@f#{(cc*10000).to_i / 100.0},000000,2,#{cc}:.5,16,2
+      ")
+
+    file_name = "portfolio/risk_heat_chart.png"
+    File.open("public/images/#{file_name}", "w") { |f|
+      f << image
+    }
+
     return {
+      :file_name => file_name,
       :portfolio_var => portfolio_var,
       :portfolio_cvar => portfolio_cvar,
-      :holding_vars => risks
+      :holding_vars => risks,
+      :score => cc
     }
   end
 
@@ -746,7 +970,7 @@ class PortfolioController < ApplicationController
   end
 
   def style_return_decomposition(state)
-    window_size = 120
+    window_size = 125
     sampling_period = 10
 
     factors = Portfolio::Composition::ReturnAnalysis::STYLE_PROXIES
@@ -801,6 +1025,8 @@ class PortfolioController < ApplicationController
   end
 
   def rate_return_sensitivity(state)
+    window_size = 125
+    sampling_period = 10
     factors = Portfolio::Composition::ReturnAnalysis::RATE_PROXIES
     return_values = Portfolio::Composition::ReturnAnalysis::composition_by_factors(state, factors, window_size, sampling_period)
     #get a return composition on the sliced-state
@@ -917,7 +1143,7 @@ class PortfolioController < ApplicationController
 
   def up_down_capture(state)
     points = Portfolio::Risk::upside_downside_capture(state,
-      {:tickers => ["IWM"], :number_of_shares => [1]}, 250, 5) << [1.0, 1.0]
+      {:tickers => ["IWV"], :number_of_shares => [1]}, 250, 5) << [1.0, 1.0]
 
     total_points = points.size - 2
 
@@ -969,7 +1195,7 @@ class PortfolioController < ApplicationController
     sc = GoogleChart::ScatterPlot.new
     sc.width = 500
     sc.height = 500
-    sc.title = "Annual Up / Down Capture Analysis|against Russell 2000 (measured weekly)"
+    sc.title = "Annual Up / Log-Down Capture Analysis|against Russell 3000 (measured weekly)"
     sc.data "", points, colors.reverse
     sc.encoding = :extended
 
@@ -1005,37 +1231,118 @@ class PortfolioController < ApplicationController
       :chm => chm
     }
 
-    file_name = "portfolio/up_down_capture"
-    sc.write_to("public/images/#{file_name}", extras)
+    up_down_file_name = "portfolio/up_down_capture"
+    sc.write_to("public/images/#{up_down_file_name}", extras)
 
-    return { :file_name => "#{file_name}.png" }
+
+    #given left, right, top, bottom, we can find intersection point and area
+    #of 1:1 line
+    rect_size = (right - left) * (top - bottom)
+            
+    area_above = nil
+    if bottom > right
+      area_above = 1.0
+    elsif top < left
+      area_above = 0.0
+    elsif top < right
+      if left > bottom # intersection on the left side
+        Rails.logger.info("Intersected top and left")
+        triangle_size = ((top - left)**2) / 2.0
+        area_above = triangle_size / rect_size
+      else
+        Rails.logger.info("Intersected top and bottom")
+        # find the left rectangle size
+        lrect = (top - bottom) * (bottom - left)
+        # find the rest of the triangle
+        tri = ((top - bottom) ** 2) / 2
+
+        area_above = (lrect + tri) / rect_size
+      end
+    elsif right < top # intersection on the right side
+      if right > bottom
+        Rails.logger.info("Intersected right and bottom")
+        triangle_size = ((right - bottom)**2) / 2.0
+        area_above = 1.0 - triangle_size / rect_size
+      else
+        Rails.logger.info("Intersected right and left")
+        lrect = (top - right) * (right - left)
+        tri = ((right - left) ** 2) / 2
+
+        area_above = (lrect + tri) / rect_size
+      end
+    else #corner case -- exact corner intersection
+      area_above = 0.5
+    end
+
+    #weird fucking hack to get the http get to go through ... requires a newline?!
+    image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@f#{(area_above*10000).to_i / 100.0},000000,2,#{area_above}:.5,16,2
+      ")
+
+    spectrum_file_name = "portfolio/up_down_heat_chart.png"
+    File.open("public/images/#{spectrum_file_name}", "w") { |f|
+      f << image
+    }
+
+    return { :file_names => ["#{up_down_file_name}.png", spectrum_file_name] ,
+             :score => area_above }
   end
 
   def dimensionality_analysis(state)
     tickers = state.tickers
+    shares = state.number_of_shares
+    dates = state.dates
+    time_series = state.time_series
+    
     eigen_values, percent_variance, eigen_vectors =
       Portfolio::Composition::ReturnAnalysis::pca(state)
 
     #identify which dimension to associate a holding with
     identified_dimension = Array.new(tickers.size)
-    sqrt_variance = percent_variance.map { |e| Math.sqrt(e) }
     tickers.size.times { |i|
       # take the eigen_vector matrix
       # and for each column in our correlation matrix,
       # solve for our betas.  find the max beta, and use that as
       # our identified dimension
       c, cov, chisq, status = GSL::MultiFit::linear(eigen_vectors.transpose, state.sample_correlation_matrix.column(i))
-      identified_dimension[i] = (c * sqrt_variance).map {|e| e.abs }.sort_index[-1]
+      identified_dimension[i] = (c * percent_variance.map { |e| Math.sqrt(e) }).map {|e| e.abs }.sort_index[-1]
     }
 
     unique_dimensions = identified_dimension.uniq.sort
 
     clusters = Cluster.hierarchical(state.sample_correlation_matrix, unique_dimensions.size)
     identified_clusters = {}
-    clusters.map { |e| e.each { |i| identified_clusters[tickers[i]] = i }}
+    clusters.each_with_index { |e,i|
+      e.each { |j|
+        identified_clusters[tickers[j]] = i
+      }
+    }
 
+    cluster_values = Hash.new(0.0)
+    total_value = 0.0
+    tickers.each_with_index { |ticker, i|
+      cluster_values[identified_clusters[ticker]] += shares[i] * time_series[ticker][dates[-1]]
+      total_value += shares[i] * time_series[ticker][dates[-1]]
+    }
+    cluster_weights = Hash[*(cluster_values.map { |k,v| [k, v/total_value]}.flatten)]
+
+    cc = 1.0 / cluster_weights.inject(0.0) { |s,p| s + p[1]**2 }
+    score = [cc / Math.sqrt(tickers.size), 1.0].min
+
+    #weird fucking hack to get the http get to go through ... requires a newline?!
+    image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@f#{(score*10000).to_i / 100.0},000000,1,#{score}:.5,16,0
+      ")
+
+    file_name = "portfolio/dimensionality_heat_chart.png"
+    File.open("public/images/#{file_name}", "w") { |f|
+      f << image
+    }
+
+    # ideal number of clusters is?  Math.sqrt(ticker.size)
+    # and ideally, the amount of wealth in each cluster would be equal
     return { :identified_clusters => identified_clusters,
-      :num_unique_clusters => unique_dimensions.size }
+      :num_unique_clusters => unique_dimensions.size,
+      :file_name => file_name,
+      :score => score }
   end
 =begin
   def optimize

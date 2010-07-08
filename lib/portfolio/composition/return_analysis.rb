@@ -138,6 +138,7 @@ module Portfolio
         #compute the eigen-vals and eigen-vects
         eigen_values, eigen_vectors = portfolio_state.sample_correlation_matrix.eigen_symmv
         eigen_values.map! { |e| [e, 0.0].max }
+        
         percent_variance = eigen_values.abs / eigen_values.abs.sum
 
         return [eigen_values, percent_variance, eigen_vectors]

@@ -11,11 +11,12 @@ module Portfolio
     attr_reader :sample_correlation_matrix
     attr_reader :weights
     attr_reader :number_of_shares
+    attr_reader :companies
         
     def initialize(params = {})
       Status.info("Initializing portfolio state")
       @number_of_shares = params[:number_of_shares]
-      @tickers = params[:tickers].map { |ticker| ticker.downcase}
+      @tickers = params[:tickers].map { |ticker| ticker.upcase}
             
       # check if the time series already exists
       if params[:time_series].nil?
@@ -48,6 +49,7 @@ module Portfolio
         }
       else
         # the time series already exists, so just copy it
+        @companies = params[:companies]
         @time_series = params[:time_series]
         @dates = params[:dates]
       end
@@ -93,6 +95,7 @@ module Portfolio
       params = {  :tickers => @tickers,
         :dates => dates,
         :number_of_shares => @number_of_shares,
+        :companies => @companies,
         :time_series => select_time_series
       }
             
@@ -120,6 +123,7 @@ module Portfolio
       params = { :tickers => @tickers,
         :dates => dates,
         :number_of_shares => @number_of_shares,
+        :companies => @companies,
         :time_series => select_time_series
       }
                    
@@ -223,7 +227,7 @@ module Portfolio
       
       # drastically over-weight recent income growth versus historic
       return monte_carlo(log_returns, current_income,
-                          periods_forward, n, block_size, 0.85)
+                          periods_forward, n, block_size, 1)
     end
 
     def return_monte_carlo(periods_forward = 250, n = 10000, block_size = 10)

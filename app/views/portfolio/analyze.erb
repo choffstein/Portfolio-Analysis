@@ -96,7 +96,7 @@
     <td>Return Projection (Monte-Carlo Simulation)</td>
     <td align="center"><div id="return_mc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :render_return_monte_carlo},
+        :url => {:action => :render_expected_return_monte_carlo},
         :loading => "start_xhr('return_mc_results')",
         :complete => "stop_xhr('return_mc_results')",
         :update => 'return_mc_results' %>
@@ -138,7 +138,7 @@
     <td>Style Drift Analysis</td>
     <td align="center"><div id="style_rc_results" style="visibility:hidden">
       </div><%= link_to_remote "Run",
-        :url => {:action => :style_return_decomposition},
+        :url => {:action => :render_style_return_decomposition},
         :loading => "start_xhr('style_rc_results')",
         :complete => "stop_xhr('style_rc_results')",
         :update => 'style_rc_results' %>
@@ -186,6 +186,17 @@
         :loading => "start_xhr('eigen_value_results')",
         :complete => "stop_xhr('eigen_value_results')",
         :update => 'eigen_value_results' %>
+    </td>
+  </tr>
+
+  <tr>
+    <td>Render Report</td>
+    <td align="center"><div id="pdf_results" style="visibility:hidden">
+      </div><%= link_to_remote "Run",
+        :url => {:action => :render_report},
+        :loading => "start_xhr('pdf_results')",
+        :complete => "stop_xhr('pdf_results')",
+        :update => 'pdf_results' %>
     </td>
   </tr>
 </table>
