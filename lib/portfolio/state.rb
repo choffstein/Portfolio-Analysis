@@ -216,24 +216,99 @@ module Portfolio
     def income_monte_carlo(periods_forward = 4, n = 10000, block_size = 1)
       Status.info("Performing portfolio income monte-carlo simulation")
       historic_income = self.to_income_stream
-      
+
+=begin
       # transform the income stream into log returns
-      current_income = historic_income[-1]
+      
       log_historic_income = historic_income.map { |v| Math.log(v) }
 
       length = log_historic_income.size
       log_returns = log_historic_income.get(1,length-1) -
                                     log_historic_income.get(0,length-1)
+=end
+
+      series = Statistics::Bootstrap::block_bootstrap(historic_income,
+                                      periods_forward, block_size, n, 0.85)
+
+
+      return_series = GSL::Matrix.alloc(n, periods_forward)
       
-      # drastically over-weight recent income growth versus historic
-      return monte_carlo(log_returns, current_income,
-                          periods_forward, n, block_size, 1)
+      series.size1.times { |i|
+        row = series.row(i)
+        values = row.to_a.map { |i| historic_income.get(i.to_i, block_size).to_a }.flatten
+        return_series.set_row(i, values)
+      }
+
+      # now, for each column, we need a mean and variance
+      means = GSL::Vector.alloc(return_series.size2)
+      upside_stddevs = GSL::Vector.alloc(return_series.size2)
+      downside_stddevs = GSL::Vector.alloc(return_series.size2)
+      return_series.size2.times { |i|
+        column = return_series.column(i)
+        m = column.mean
+        means[i] = m
+
+        offset_column = (column - m).to_a
+        upside_array = offset_column.map { |x| x > 0 ? x : 0 }
+        downside_array = offset_column.map { |x| x < 0 ? x : 0 }
+
+        upside_vector = GSL::Vector.alloc(upside_array)
+        downside_vector = GSL::Vector.alloc(downside_array)
+
+        upside_stddevs[i] = Math.sqrt(upside_vector.variance)
+        downside_stddevs[i] = Math.sqrt(downside_vector.variance)
+      }
+
+      return {:means => means,
+              :upside_standard_deviations => upside_stddevs,
+              :downside_standard_deviations => downside_stddevs }
+            
     end
 
     def return_monte_carlo(periods_forward = 250, n = 10000, block_size = 10)
       Status.info("Performing return monte-carlo simulation on portfolio")
-      return monte_carlo(self.to_log_returns, compute_current_portfolio_value,
-                          periods_forward, n, block_size, 1.0)
+
+      log_returns = self.to_log_returns
+      initial_value = compute_current_portfolio_value
+
+      series = Statistics::Bootstrap::block_bootstrap(log_returns,
+                                      periods_forward, block_size, n, 0.999)
+
+      # given our current portfolio value and a series of log returns,
+      # we need to come up with a series of portfolio values
+
+      return_series = GSL::Matrix.alloc(n, periods_forward)
+
+      series.size1.times { |i|
+        row = series.row(i)
+        values = row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
+        v = GSL::Vector[*values].cumprod
+        return_series.set_row(i, initial_value * v)
+      }
+
+      # now, for each column, we need a mean and variance
+      means = GSL::Vector.alloc(return_series.size2)
+      upside_stddevs = GSL::Vector.alloc(return_series.size2)
+      downside_stddevs = GSL::Vector.alloc(return_series.size2)
+      return_series.size2.times { |i|
+        column = return_series.column(i)
+        m = column.mean
+        means[i] = m
+
+        offset_column = (column - m).to_a
+        upside_array = offset_column.map { |x| x > 0 ? x : 0 }
+        downside_array = offset_column.map { |x| x < 0 ? x : 0 }
+
+        upside_vector = GSL::Vector.alloc(upside_array)
+        downside_vector = GSL::Vector.alloc(downside_array)
+
+        upside_stddevs[i] = Math.sqrt(upside_vector.variance)
+        downside_stddevs[i] = Math.sqrt(downside_vector.variance)
+      }
+
+      return {:means => means,
+              :upside_standard_deviations => upside_stddevs,
+              :downside_standard_deviations => downside_stddevs }
     end
 
     def current_portfolio_value
@@ -290,48 +365,6 @@ module Portfolio
     end
     
     private
-
-    def monte_carlo(log_returns, initial_value, periods_forward = 1250,
-                      n = 2500, block_size = 25, weight_factor = 1.0)
-      series = Statistics::Bootstrap::block_bootstrap(log_returns,
-                                periods_forward, block_size, n, weight_factor)
-
-      # given our current portfolio value and a series of log returns,
-      # we need to come up with a series of portfolio values
-
-      return_series = GSL::Matrix.alloc(n, periods_forward)
-
-      series.size1.times { |i|
-        row = series.row(i)
-        values = row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
-        v = GSL::Vector[*values].cumprod
-        return_series.set_row(i, initial_value * v)
-      }
-
-      # now, for each column, we need a mean and variance
-      means = GSL::Vector.alloc(return_series.size2)
-      upside_stddevs = GSL::Vector.alloc(return_series.size2)
-      downside_stddevs = GSL::Vector.alloc(return_series.size2)
-      return_series.size2.times { |i|
-        column = return_series.column(i)
-        m = column.mean
-        means[i] = m
-
-        offset_column = (column - m).to_a
-        upside_array = offset_column.map { |x| x > 0 ? x : 0 }
-        downside_array = offset_column.map { |x| x < 0 ? x : 0 }
-
-        upside_vector = GSL::Vector.alloc(upside_array)
-        downside_vector = GSL::Vector.alloc(downside_array)
-
-        upside_stddevs[i] = Math.sqrt(upside_vector.variance)
-        downside_stddevs[i] = Math.sqrt(downside_vector.variance)
-      }
-
-      return {:means => means,
-              :upside_standard_deviations => upside_stddevs,
-              :downside_standard_deviations => downside_stddevs }
-    end
 
     # compute the current weights of the portfolio
     def compute_weights
