@@ -12,29 +12,26 @@ module Portfolio
         'Consumer Staples' => 'XLP',
         'Utilities' => 'XLU',
         'Health Care' => 'XLV',
-        'Consumer Discretionary' => 'XLY',
+        'Consumer Disc.' => 'XLY',
         'Real Estate' => 'VNQ'
       }
 
       WORLD_EQUITY_PROXIES = {
-        'United States of America' => 'IWV',
+        'U.S.A' => 'IWV',
         'Europe' => 'VGK',
         'Russia' => 'RSX',
         'Latin America' => 'ILF',
         'Japan' => 'EWJ',
-        'Pacific / Asia Ex-Japan' => 'EPP',
+        'Pacific Ex-Japan' => 'EPP',
         'India' => 'INP'
       }
 
       ASSET_PROXIES = {
         'U.S. Equity' => 'IWV',
-        'Europe, Asian & Far East Equity' => 'EFA',
-        'Emerging Market Equities' => 'VWO',
-
-        'U.S. Corporate & Treasury Bonds' => 'AGG',
-
+        'EAFA Equity' => 'EFA',
+        'Emerging Equity' => 'VWO',
+        'U.S. Bonds' => 'AGG',
         'Commodities' => 'DBC',
-         
         'U.S. Real Estate' => 'VNQ'
       }
 
@@ -81,7 +78,7 @@ module Portfolio
           x = factor_log_returns.submatrix(0, offset, factors.size, window_size)
           b = GSL::Vector.alloc(*portfolio_log_returns[(offset...(offset+window_size))])
 
-          c, cov, chisq, status = GSL::MultiFit::linear(x.transpose,b)
+          c, = GSL::MultiFit::linear(x.transpose,b)
 
           #normalize the coefficients and take their proportion
           #abs_normalized_coeffs = (c / Math.sqrt(c * c.transpose)).abs

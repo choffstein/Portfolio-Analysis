@@ -34,6 +34,19 @@ module Yahoo
         sector = clean_result(results['query']['results']['tr'][1]['td'][1]['a']['content'])
       rescue
       end
+
+      available_sectors = ['Basic Materials',
+                          'Conglomerates',
+                          'Consumer Goods',
+                          'Financial',
+                          'Healthcare',
+                          'Industrial Goods',
+                          'Services',
+                          'Technology',
+                          'Utilities']
+
+      sector = "N/A" unless available_sectors.include?(sector)
+
       return sector
     end
 

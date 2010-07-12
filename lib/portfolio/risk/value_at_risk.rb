@@ -49,7 +49,8 @@ module Portfolio
 
           left_tail_cutoff = mean - za * stddev
  
-          total_left_tail_prob = 0.5 * (1.0 + Math.erf((left_tail_cutoff - mean) / Math.sqrt(2.0*variance)))
+          total_left_tail_prob = 0.5 * (1.0 +
+                  Math.erf((left_tail_cutoff - mean) / Math.sqrt(2.0*variance)))
           k = (1.0 / Math.sqrt(2.0*Math::PI*variance)) / total_left_tail_prob
           f = GSL::Function.alloc{ |x|
             x * k * Math.exp(-((x-mean)**2) / (2.0*variance))
