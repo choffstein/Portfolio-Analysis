@@ -35,15 +35,6 @@ class PortfolioController < ApplicationController
       # expected_volatility, file_name, marginal_contributions
       v_results = volatility_analysis(state)
 
-      # file_name
-      rmc_results = expected_return_monte_carlo(state)
-          
-      # file_name
-      imc_results = income_monte_carlo(state)
-
-      # file_names
-      sa_results = sector_allocation_analysis(state)
-
       # portfolio_var, portfolio_cvar
       # holding_vars
       #     individual_var
@@ -54,21 +45,6 @@ class PortfolioController < ApplicationController
       # file_name
       # score
       rd_results = risk_decomposition_analysis(state)
-
-      # file_names
-      sec_results = sector_return_decomposition(state)
-
-      # file_name
-      sr_results = style_return_decomposition(state)
-
-      # file_name
-      rs_results = rate_return_sensitivity(state)
-
-      # file_names
-      ar_results = asset_return_decomposition(state)
-
-      # file_name, score
-      ud_results = up_down_capture(state)
 
       # identified_clusters, num_unique_clusters, file_name, score
       dim_results = dimensionality_analysis(state)
@@ -98,7 +74,7 @@ class PortfolioController < ApplicationController
         text "Newfound Portfolio Diagnotistics", :align => :center
 
         self.font_size = 8
-        move_down 100
+        move_down 200
         font 'Helvetica', :style => :bold
         text "Limitation of Liability"
         font 'Helvetica'
@@ -121,15 +97,206 @@ class PortfolioController < ApplicationController
         move_down 175
         text "Analysis of Portfolio", :align => :center
 
-
         start_new_page
+        move_down 10
+        self.font_size = 16
+        text "Portfolio Statistics", :align => :center
+        move_down 10
+        self.font_size = 12
+        text "Annual Expected Portfolio Variance: #{(v_results[:expected_volatility]*10000).to_i/100.0}%"
+        text "Annual Portfolio Value-at-Risk: #{(rd_results[:portfolio_var]*10000).to_i/100.0}%"
+        text "Annual Portfolio Conditional Value-at-Risk: #{(rd_results[:portfolio_cvar]*10000).to_i/100.0}%"
 
+        move_down 20
+        self.font_size = 13
+        text "Diversification Score", :align => :center
+        img_handle = "#{RAILS_ROOT}/public/images/#{cor_results[:file_name]}"
+        image img_handle, :position => :center
+
+        move_down 20
+        self.font_size = 13
+        text "Risk Concentration Score", :align => :center
+        img_handle = "#{RAILS_ROOT}/public/images/#{rd_results[:file_name]}"
+        image img_handle, :position => :center
+
+        move_down 20
+        self.font_size = 13
+        text "Dimensionality Score", :align => :center
+        img_handle = "#{RAILS_ROOT}/public/images/#{dim_results[:file_name]}"
+        image img_handle, :position => :center
+
+        move_down 20
+        self.font_size = 13
+        text "Market Capture Score", :align => :center
+        img_handle = "#{RAILS_ROOT}/public/images/#{ud_results[:file_names][1]}"
+        image img_handle, :position => :center
+
+        begin
+          # file_names
+          sa_results = sector_allocation_analysis(state)
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 100
+          #text "Sector Allocation", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{sa_results[:file_name]}"
+          image img_handle, :position => :center
+        rescue
+        end
+
+        begin
+          # file_name
+          rmc_results = expected_return_monte_carlo(state)
+
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 100
+          text "Daily Projection of Portfolio Value", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{rmc_results[:file_name]}"
+          image img_handle, :position => :center
+
+          self.font_size = 12
+          move_down 20
+          text "Portfolio Value projection is performed using a Monte-Carlo simulation.  " +
+               "To perform this simulation, a block-bootstrapping method is utilized, " +
+               "where historic log-returns over a 5-year period are sampled in two-week " +
+               "periods and other 'possible' returns are constructed.  This methodology is " +
+               "utilized because it is able to capture the correlation structure of the underlying " +
+               "holdings, as well as autocorrelation, without making any assumptions about the " +
+               "underlying distribution."
+
+        rescue
+        end
+        
+        begin         
+          # file_name
+          imc_results = income_monte_carlo(state)
+
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 50
+          text "Quarterly Projection of Portfolio Income", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{imc_results[:file_name]}"
+          image img_handle, :position => :center
+
+          self.font_size = 12
+          move_down 20
+          text "Income projection is performed utilizing a similar Monte-Carlo simulation " +
+               "as portfolio value projection, but utilizes dividend growth history.  This " +
+               "projection works best for holdings with stable dividend histories."
+        rescue
+        end
+
+        begin
+          # file_names
+          sec_results = sector_return_decomposition(state)
+          
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 50
+          text "Sector Contribution Analysis", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{sec_results[:file_names][0]}"
+          image img_handle, :position => :center, :fit => [500, 400]
+          img_handle = "#{RAILS_ROOT}/public/images/#{sec_results[:file_names][1]}"
+          image img_handle, :position => :center, :fit => [500, 200]
+
+          self.font_size = 12
+          move_down 20
+          text "This graph provides insight as to how returns may have been replicated " +
+               "or attributed to a portfolio of sector proxy holdings.  While companies are " +
+               "classified into a single sector, their corporate performance is " +
+               "impacted by the economy as a whole.  Analyzing return attribution to sectors " +
+               "can allow you to identify exposures to sectors that may not have been obvious " +
+               "at first glance."
+        rescue
+        end
+
+        begin
+          # file_names
+          ar_results = asset_return_decomposition(state)
+          
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 50
+          text "Asset Contribution Analysis", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{ar_results[:file_names][0]}"
+          image img_handle, :position => :center, :fit => [500, 400]
+          img_handle = "#{RAILS_ROOT}/public/images/#{ar_results[:file_names][1]}"
+          image img_handle, :position => :center, :fit => [500, 200]
+
+          self.font_size = 12
+          move_down 20
+          text "Much like sector return attribution, asset return attribution gives insight " +
+              "into the corporate exposure to macro-economic asset classes of holdings in the " +
+              "portfolio."
+        rescue
+        end
+
+        begin
+          # file_name
+          sr_results = style_return_decomposition(state)
+          
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 50
+          text "Style Drift Analysis", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{sr_results[:file_name]}"
+          image img_handle, :position => :center
+        rescue
+        end
+
+        begin
+          # file_name
+          rs_results = rate_return_sensitivity(state)
+          
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 50
+          text "Credit & Term Sensitivity Analysis", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{rs_results[:file_name]}"
+          image img_handle, :position => :center
+        rescue
+        end
+
+        begin
+          # file_names, score
+          ud_results = up_down_capture(state)
+
+          start_new_page
+          move_down 10
+          self.font_size = 16
+          move_down 50
+          text "Up / Down Capture Analysis", :align => :center
+          img_handle = "#{RAILS_ROOT}/public/images/#{ud_results[:file_names][0]}"
+          image img_handle, :position => :center, :fit => [350, 350]
+
+          self.font_size = 12
+          move_down 5
+          text "Typical Up / Down capture analysis determines, compared to a benchmark, " +
+               "how much of the upside return a portfolio captured versus how much of the " +
+               "downside it incurred.  We feel that this does not truly identify the risk-aversion " +
+               "investors display, so we utilize a method where down-side capture is measured as " +
+               "the percent return required for the portfolio to return to parity versus the percent " +
+               "return required for the benchmark to return to parity.  A negative up-side capture " +
+               "indicates that the portfolio loses value when the benchmark goes up, and a negative " +
+               "down-side capture indicates that the portfolio gains value when the benchmark loses it."
+        rescue
+        end
+        
+        start_new_page
         move_down 10
         self.font_size = 16
         text "Correlation Analysis"
         move_down 10
 
-        self.font_size = 8
+        corr_font_size = [[(200.0 / tickers.size).to_i, 6].max, 16].min
+        self.font_size = corr_font_size
         # generate our rows
         rows = []
         rows << [""] + tickers
@@ -143,7 +310,7 @@ class PortfolioController < ApplicationController
         }
 
         table(rows,
-                :cell_style => { :padding => 3 },
+                :cell_style => { :padding => 1 },
                 :header => true,
                 :width => bounds.width) do
           cells.borders = []
@@ -152,7 +319,7 @@ class PortfolioController < ApplicationController
           row(0).style(:style => :bold, :background_color => 'cccccc')
           column(0).style(:style => :bold, :background_color => 'cccccc')
           row(0).column(0).style(:background_color => 'ffffff')
-                    
+
           tickers.each_with_index { |t1,i|
             tickers.each_with_index { |t2,j|
               row(i+1).column(j+1).style(:background_color => cor_results[:color_coded_correlation][t1][t2][:color])
@@ -160,50 +327,27 @@ class PortfolioController < ApplicationController
           }
 
           columns(1..tickers.size).style(:align => :center)
-          
+
         end
 
-        move_down 20
-        self.font_size = 13
-        text "Diversification Score", :align => :center
-        img_handle = "#{RAILS_ROOT}/public/images/#{cor_results[:file_name]}"
-        image img_handle
-
-        start_new_page
-        move_down 10
-        self.font_size = 16
-        text "Portfolio Statistics"
-        move_down 10
-        self.font_size = 8
-        text "Annual Expected Portfolio Variance: #{(v_results[:expected_volatility]*10000).to_i/100.0}%"
-        text "Annual Portfolio Value-at-Risk: #{(rd_results[:portfolio_var]*10000).to_i/100.0}%"
-        text "Annual Portfolio Conditional Value-at-Risk: #{(rd_results[:portfolio_cvar]*10000).to_i/100.0}%"
-
-        move_down 10
-        self.font_size = 13
-        text "Daily Projection of Portfolio Value (Monte-Carlo Simulation)"
-        img_handle = "#{RAILS_ROOT}/public/images/#{rmc_results[:file_name]}"
-        image img_handle
-
-        move_down 10
-        text "Quarterly Projection of Portfolio Income (Monte-Carlo Simulation)"
-        img_handle = "#{RAILS_ROOT}/public/images/#{imc_results[:file_name]}"
-        image img_handle
-        
-        start_new_page
-        
         ####### HOLDING INFORMATION
 
         start_new_page
-      self.font_size = 8
+        self.font_size = 7
         headers = ["Name", "Ticker", "Sector", "Shares", "Value", "Weight",
-                   "Marginal\nVolatility", "VaR", "CVaR",
-                   "Marginal VaR", "Risk Allocation",
-                   "Marginal Diversification\n(per 100 bp change in weight)"]
+                   "Contr. to Portfolio\n Volatility (%)",
+                   "Marginal\nVolatility (bp)", "VaR (%)", "CVaR (%)",
+                   "Marginal VaR (bp)", "Risk Allocation",
+                   "Marginal Diversification"]
 
         rows = []
-        tickers.each_with_index {|ticker, i|
-
+        cluster_stats = {}
+ 
+        tickers.each_with_index { |ticker, i|
+          cluster = dim_results[:identified_clusters][ticker]
+          cluster_stats[cluster] ||= Hash.new(0.0)
+          
+          #FIX: This should be refactored into the correlation matrix section...
           correlation_matrix = state.sample_correlation_matrix.clone.to_a
           correlation_matrix.delete_at(i) #delete the ith row
           correlation_matrix.each { |a| a.delete_at(i) } #delete the ith column too
@@ -214,34 +358,52 @@ class PortfolioController < ApplicationController
           weights.delete_at(i)
           weights = weights / weights.abs.sum #recompute weights
 
-          indiv_ipc = weights * correlation_matrix * weights.col
-          indiv_ipc = (1.0 - (indiv_ipc - weights * weights.col)) / 2.0
-
+          #theoretically, (state.weights.col * state.weights).to_v.sum should equal 1
+          #but why risk numerical innacuracy?
+          indiv_ipc = (weights * correlation_matrix * weights.col) / (state.weights.col * state.weights).to_v.sum
+          indiv_ipc = (1.0 - indiv_ipc) / 2.0
 
           #Rails.logger.info(cor_results[:score] - indiv_ipc)
+          
+          String.send(:include, StringExtensions)
 
-          rows << [state.companies[ticker].name, 
+          weight = (state.weights[i]*10000).to_i / 100.0
+          vol_contribution = ((v_results[:contributions][ticker] * 10000).to_i)/ 100.0
+          risk_contribution = (rd_results[:holding_vars][ticker][:proportion_var] * 10000).to_i / 100.0
+          rows << [state.companies[ticker].name.three_dot_chop(20),
                   ticker,
                   state.companies[ticker].sector,
                   shares[i].to_s,
                   "$#{(shares[i] * state.time_series[ticker][state.dates[-1]]).to_s}",
-                  "#{((state.weights[i]*10000).to_i / 100.0).to_s}%",
-                  "#{(((v_results[:marginal_contributions][ticker] * 100).to_i)/100.0).to_s} bp",
-                  "#{((rd_results[:holding_vars][ticker][:individual_var] * 10000).to_i / 100.0).to_s}%",
-                  "#{((rd_results[:holding_vars][ticker][:individual_cvar] * 10000).to_i / 100.0).to_s}%",
-                  "#{((rd_results[:holding_vars][ticker][:marginal_var] * 10000).to_i / 100.0).to_s} bp",
-                  "#{((rd_results[:holding_vars][ticker][:proportion_var] * 10000).to_i / 100.0).to_s}%",
+                  "#{weight.to_s}%",
+                  "#{vol_contribution.to_s}",
+                  "#{(((v_results[:marginal_contributions][ticker] * 100).to_i)/100.0).to_s}",
+                  "#{((rd_results[:holding_vars][ticker][:individual_var] * 10000).to_i / 100.0).to_s}",
+                  "#{((rd_results[:holding_vars][ticker][:individual_cvar] * 10000).to_i / 100.0).to_s}",
+                  "#{((rd_results[:holding_vars][ticker][:marginal_var] * 10000).to_i / 100.0).to_s}",
+                  "#{risk_contribution.to_s}",
                   "#{((((cor_results[:score] - indiv_ipc) / (state.weights[i])) * 100).to_i / 100.0).to_s}"]
- 
+
+          cluster_stats[cluster][:total_weight] += weight
+          cluster_stats[cluster][:total_volatility] += vol_contribution
+          cluster_stats[cluster][:total_risk] += risk_contribution
+          cluster_stats[cluster][:color] = cluster_colors[cluster] #overwrite color...
         }
 
+        cluster_stats.each_with_index { |e,i|
+          k, v = e
+          rows << ["Cluster #{i}", "", "", "", "", v[:total_weight].to_s,
+                   v[:total_volatility].to_s, "", "", "", "",
+                   v[:total_risk].to_s, ""]
+        }
+        
         self.font_size = 32
         move_down 175
         text "Analysis of Holdings", :align => :center
 
         start_new_page
 
-        self.font_size = 8
+        self.font_size = 6
         move_down 10
         table([headers] + rows,
                 :cell_style => { :padding => 3 },
@@ -249,10 +411,17 @@ class PortfolioController < ApplicationController
                 :width => bounds.width) do
           cells.borders = []
           # Use the row() and style() methods to select and style a row.
-          row(0).style(:style => :bold, :background_color => 'cccccc')
+          row(0).style(:style => :bold, :background_color => 'cccccc', :align => :center)
           tickers.each_with_index { |ticker,i|
             row(i+1).style(:background_color => cluster_colors[dim_results[:identified_clusters][ticker]])
           }
+
+          cluster_stats.each_with_index { |e,i|
+            k,v = e
+            row(tickers.size+i).style(:background_color => v[:color])
+          }
+
+
           columns(1...headers.size).style(:align => :center)
         end
 
@@ -610,11 +779,12 @@ class PortfolioController < ApplicationController
   def correlation_analysis(state)
     correlation_matrix = state.sample_correlation_matrix
 
-    # ipc = sum(i) sum(j) x(i)x(j)p(i,j) i != j
-    ipc = state.weights * correlation_matrix * state.weights.col
+    # ipc = sum(i) sum(j) x(i)x(j)p(i,j)
+    #theoretically, (state.weights.col * state.weights).to_v.sum should equal 1
+          #but why risk numerical innacuracy?
+    ipc = (state.weights * correlation_matrix * state.weights.col) / (state.weights.col * state.weights).to_v.sum
     # now we have to subtract the correlation of 1 (diagonals)
     # subtract the sum of the weights squared
-    ipc = ipc - state.weights * state.weights.col
 
     color_coded_correlation = {}
 
@@ -692,10 +862,19 @@ class PortfolioController < ApplicationController
       marginal_contributions[tickers[i]] = current_marginal_contributions[i]*1000
     }
 
+    columns = contributions.size2
+    current_contributions = contributions.column(columns-2)
+    total_current_contribution = current_contributions.abs.sum
+    contributions = {}
+    tickers.size.times { |i|
+      contributions[tickers[i]] = current_contributions[i].abs / total_current_contribution
+    }
+
     return {
       :expected_volatility => expected_volatility,
       :file_name => "#{file_name}.png",
-      :marginal_contributions => marginal_contributions
+      :marginal_contributions => marginal_contributions,
+      :contributions => contributions
     }
   end
 
@@ -1195,7 +1374,6 @@ class PortfolioController < ApplicationController
     sc = GoogleChart::ScatterPlot.new
     sc.width = 500
     sc.height = 500
-    sc.title = "Annual Up / Log-Down Capture Analysis|against Russell 3000 (measured weekly)"
     sc.data "", points, colors.reverse
     sc.encoding = :extended
 
@@ -1326,7 +1504,7 @@ class PortfolioController < ApplicationController
     cluster_weights = Hash[*(cluster_values.map { |k,v| [k, v/total_value]}.flatten)]
 
     cc = 1.0 / cluster_weights.inject(0.0) { |s,p| s + p[1]**2 }
-    score = [cc / Math.sqrt(tickers.size), 1.0].min
+    score = [cc / [Math.sqrt(tickers.size), 3.0].max, 1.0].min
 
     #weird fucking hack to get the http get to go through ... requires a newline?!
     image = Net::HTTP.get('http://chart.apis.google.com', "/chart?cht=lc&chs=400x75&chbh=14,0,0&chd=t:100|0,100&chco=00000000&chf=c,lg,0,00d10f,1,4ed000,0.8,c8d500,0.6,f07f00,0.30,d03000,0.10,ad0000,0&chxp=0,8,30,50,70,90|1,8,30,50,70,90&chm=@f#{(score*10000).to_i / 100.0},000000,1,#{score}:.5,16,0
@@ -1455,8 +1633,7 @@ class PortfolioController < ApplicationController
     offset = (select_state.dates.size - 1250) < 0 ? 0 : (select_state.dates.size - 1250)
     select_portfolio_state = select_state.slice(offset) # ~5 years
 
-    ipc = weights * select_portfolio_state.sample_correlation_matrix * weights.col
-    ipc = ipc - weights * weights.col
+    ipc = weights * select_portfolio_state.sample_correlation_matrix * weights.col / (state.weights.col * state.weights).to_v.sum
 
     select_tickers.zip(weights.to_a) { |t,w|
       inline_renderable += "#{t}: #{w}<br/>"
