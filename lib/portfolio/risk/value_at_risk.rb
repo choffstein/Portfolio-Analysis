@@ -45,15 +45,20 @@ module Portfolio
                (1.0/24.0)*(z**3 - 3.0*z)*kurtosis -
                (1.0/36.0)*(2.0*(z**3) - 5.0*z)*(skewness**2)
 
-          left_tail_cutoff = mean - za * Math.sqrt(variance)
-          vars[i] = 1.0 - Math.exp(left_tail_cutoff)
+          stddev = Math.sqrt(variance)
 
-          left_tail = differences.to_a.select { |e| e < left_tail_cutoff }
-          if left_tail.size == 0
-            cvars[i] = vars[i]
-          else
-            cvars[i] = 1.0 - Math.exp(GSL::Vector[*left_tail].mean)
-          end
+          left_tail_cutoff = mean - za * stddev
+ 
+          total_left_tail_prob = 0.5 * (1.0 + Math.erf((left_tail_cutoff - mean) / Math.sqrt(2.0*variance)))
+          k = (1.0 / Math.sqrt(2.0*Math::PI*variance)) / total_left_tail_prob
+          f = GSL::Function.alloc{ |x|
+            x * k * Math.exp(-((x-mean)**2) / (2.0*variance))
+          }
+
+          left_tail_average, = f.qagil(left_tail_cutoff)
+
+          vars[i] = 1.0 - Math.exp(left_tail_cutoff)
+          cvars[i] = 1.0 - Math.exp(left_tail_average)
         }
 
         return {:var => vars.mean, :cvar => cvars.mean}
