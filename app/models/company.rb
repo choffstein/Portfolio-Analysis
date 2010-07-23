@@ -106,107 +106,122 @@ class Company
   end
 
   def dividends
-    quarters = { 1 => "jan",
-                 2 => "apr",
-                 3 => "jul",
-                 4 => "oct" }
+    today = Date.today
+    file = "data/#{@ticker}_dividends_#{today.day}_#{today.mon}_#{today.year}.yml"
 
-    Status.info("Downloading dividend information for #{@ticker}")
-    data = Net::HTTP.get URI.parse("http://ichart.finance.yahoo.com/table.csv?s=#{@ticker}&g=v&ignore=.csv")
+    if File.exists?(file)
+      return YAML.load_file(file)
+    else
+      quarters = { 1 => "jan",
+                   2 => "apr",
+                   3 => "jul",
+                   4 => "oct" }
 
-    Status.info("Parsing dividend information for #{@ticker}")
+      Status.info("Downloading dividend information for #{@ticker}")
+      data = Net::HTTP.get URI.parse("http://ichart.finance.yahoo.com/table.csv?s=#{@ticker}&g=v&ignore=.csv")
 
-    dividends = {}
-    i = 0
-    first = true
-    current_quarter = nil
-    dividends_per_year = Hash.new(0.0)
-    CSV.parse(data) { |row|
-      if !first
-        date = Utility::ParseDates::str_to_date(row[0])
-        dividend = row[1].to_f
+      Status.info("Parsing dividend information for #{@ticker}")
 
-        1.upto(4) { |i|
-          # check if we need to roll-over
-          year = i == 4 ? date.year + 1 : date.year
-          next_quarter = i == 4 ? 1 : i+1
+      dividends = {}
+      i = 0
+      first = true
+      current_quarter = nil
+      dividends_per_year = Hash.new(0.0)
+      CSV.parse(data) { |row|
+        if !first
+          date = Utility::ParseDates::str_to_date(row[0])
+          dividend = row[1].to_f
 
-          # is our current date less than the beginning of the next quarter /
-          # this quarter end?
-          quarter_begin = Time.utc(date.year, quarters[i], 1, 12, 0, 0)
-          quarter_end = Time.utc(year, quarters[next_quarter], 1, 12, 0, 0)
-          if quarter_begin < date && date <= quarter_end
-            current_quarter = i
-          end
-        }
+          1.upto(4) { |i|
+            # check if we need to roll-over
+            year = i == 4 ? date.year + 1 : date.year
+            next_quarter = i == 4 ? 1 : i+1
 
-        key = "#{date.year}Q#{current_quarter}"
-        
-        if dividends[key].nil?
-          dividends[key] =  dividend
-          dividends_per_year[date.year] += 1
-        else
-          #they put two dividends in the same quarter
-          # is it a special dividend or should we just bump a quarter
-
-          # it should be an unusually high dividend INCREASE to count as a
-          # special dividend
-          if (Math.log(dividend) - 
-                    Math.log(dividends[key])).abs > 1.609 #~500% hike
-
-            #we'll take the one that was closest to the previous
-            # remember, we are 'walking backwards' (because of how we read the
-            # data, so use the 'last' quarter (which is technically the future)
-            if current_quarter == 4
-              previous_key = "#{date.year+1}Q1"
-            else
-              previous_key = "#{date.year}Q#{current_quarter+1}"
+            # is our current date less than the beginning of the next quarter /
+            # this quarter end?
+            quarter_begin = Time.utc(date.year, quarters[i], 1, 12, 0, 0)
+            quarter_end = Time.utc(year, quarters[next_quarter], 1, 12, 0, 0)
+            if quarter_begin < date && date <= quarter_end
+              current_quarter = i
             end
+          }
 
-            # wierd corner case -- this was our second dividend
-            # just take the smaller one
-            if dividends[previous_key].nil?
-              dividends[key] = [dividends[key], dividend].min
+          key = "#{date.year}Q#{current_quarter}"
+
+          if dividend.abs > 1e-16 # corner case -- $0 dividend?!
+
+            #Rails.logger.info("#{@ticker} #{key}: #{dividend}")
+
+            if dividends[key].nil?
+              dividends[key] =  dividend
+              dividends_per_year[date.year] += 1
             else
-              # choose the entry that is closest to the previous quarterly
-              # payment.  would probably be better if we used a 'best fit growth'
-              # line to estimate which payments are outliers, but this works
-              distance_one = (Math.log(dividends[previous_key])-dividends[key]).abs
-              distance_two = (Math.log(dividends[previous_key])-dividend).abs
+              #they put two dividends in the same quarter
+              # is it a special dividend or should we just bump a quarter
 
-              if distance_two < distance_one
-                dividends[key] = dividend
+              # it should be an unusually high dividend INCREASE to count as a
+              # special dividend
+              if (Math.log(dividend) -
+                        Math.log(dividends[key])).abs > 1.609 #~500% hike
+
+                #we'll take the one that was closest to the previous
+                # remember, we are 'walking backwards' (because of how we read the
+                # data, so use the 'last' quarter (which is technically the future)
+                if current_quarter == 4
+                  previous_key = "#{date.year+1}Q1"
+                else
+                  previous_key = "#{date.year}Q#{current_quarter+1}"
+                end
+
+                # wierd corner case -- this was our second dividend
+                # just take the smaller one
+                if dividends[previous_key].nil?
+                  dividends[key] = [dividends[key], dividend].min
+                else
+                  # choose the entry that is closest to the previous quarterly
+                  # payment.  would probably be better if we used a 'best fit growth'
+                  # line to estimate which payments are outliers, but this works
+                  distance_one = (Math.log(dividends[previous_key])-dividends[key]).abs
+                  distance_two = (Math.log(dividends[previous_key])-dividend).abs
+
+                  if distance_two < distance_one
+                    dividends[key] = dividend
+                  end
+                end
+              else
+                # these are probably monthly dividends
+                # add it to the current quarter
+                dividends[key] +=  dividend
+                dividends_per_year[date.year] += 1
               end
             end
-          else
-            # these are probably monthly dividends
-            # add it to the current quarter
-            dividends[key] +=  dividend
-            dividends_per_year[date.year] += 1
           end
         end
-      end
-      first = false
-    }
+        first = false
+      }
 
-    # if dividends are annual or semi-annual, split them up to make them
-    # quarterly
-    dividends_per_year.each { |k,v|
-      if v < 4 && k != Date.today.year #make sure it isn't the current year...
-        q1 = dividends["#{k}Q1"].nil? ? 0.0 : dividends["#{k}Q1"]
-        q2 = dividends["#{k}Q2"].nil? ? 0.0 : dividends["#{k}Q2"]
-        q3 = dividends["#{k}Q3"].nil? ? 0.0 : dividends["#{k}Q3"]
-        q4 = dividends["#{k}Q4"].nil? ? 0.0 : dividends["#{k}Q4"]
-        total = q1 + q2 + q3 + q4
+      # if dividends are annual or semi-annual, split them up to make them
+      # quarterly
+      dividends_per_year.each { |k,v|
+        if v < 4 && k != Date.today.year #make sure it isn't the current year...
+          q1 = dividends["#{k}Q1"].nil? ? 0.0 : dividends["#{k}Q1"]
+          q2 = dividends["#{k}Q2"].nil? ? 0.0 : dividends["#{k}Q2"]
+          q3 = dividends["#{k}Q3"].nil? ? 0.0 : dividends["#{k}Q3"]
+          q4 = dividends["#{k}Q4"].nil? ? 0.0 : dividends["#{k}Q4"]
+          total = q1 + q2 + q3 + q4
 
-        dividends["#{k}Q1"] = total/4.0
-        dividends["#{k}Q2"] = total/4.0
-        dividends["#{k}Q3"] = total/4.0
-        dividends["#{k}Q4"] = total/4.0
-      end
-    }
+          dividends["#{k}Q1"] = total/4.0
+          dividends["#{k}Q2"] = total/4.0
+          dividends["#{k}Q3"] = total/4.0
+          dividends["#{k}Q4"] = total/4.0
+        end
+      }
 
-    return dividends
+      File.open(file, "w") { |f|
+        f.write YAML::dump(dividends)
+      }
+      return dividends
+    end
   end
 
   private
@@ -218,7 +233,7 @@ class Company
     today = Date.today
     file = "data/#{@ticker}_#{today.day}_#{today.mon}_#{today.year}.csv"
     
-    if File.exist?(file)
+    if File.exists?(file)
       File.open(file, "r") { |f|
         data = f.read
       }

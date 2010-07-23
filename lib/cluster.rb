@@ -5,8 +5,7 @@
 module Cluster
   Infinity = 1.0/0
   
-  def self.hierarchical(original_data_matrix, target_clusters = nil)
-
+  def self.hierarchical(original_data_matrix, target_clusters = nil, max_distance = Infinity)
     data_matrix = original_data_matrix.clone
 
     clusters = []
@@ -33,33 +32,37 @@ module Cluster
         }
       }
 
-      i, j = current_minimum_indices
-      row_to_replace = [i,j].min
-      row_to_remove = [i,j].max
+      if current_minimum < max_distance
+        i, j = current_minimum_indices
+        row_to_replace = [i,j].min
+        row_to_remove = [i,j].max
 
-      # merge the clusters in our list
-      # put the two together
-      clusters[row_to_replace] = clusters[i] + clusters[j]
-      clusters.delete_at(row_to_remove)
+        # merge the clusters in our list
+        # put the two together
+        clusters[row_to_replace] = clusters[i] + clusters[j]
+        clusters.delete_at(row_to_remove)
 
-      # redefine our distance matrix.  Replace the ith row/column with the minimum
-      # of the ith and jth rows.
-      # remove the jth row/column
-      new_data_matrix = GSL::Matrix.alloc(n-1, original_data_matrix.size2)
+        # redefine our distance matrix.  Replace the ith row/column with the minimum
+        # of the ith and jth rows.
+        # remove the jth row/column
+        new_data_matrix = GSL::Matrix.alloc(n-1, original_data_matrix.size2)
 
-      clusters.size.times { |i|
-        cluster = clusters[i]
-        v = original_data_matrix.row(cluster[0])
-        1.upto(cluster.size-1) { |j|
-          v = v + original_data_matrix.row(cluster[j])
+        clusters.size.times { |i|
+          cluster = clusters[i]
+          v = original_data_matrix.row(cluster[0])
+          1.upto(cluster.size-1) { |j|
+            v = v + original_data_matrix.row(cluster[j])
+          }
+
+          v = v / cluster.size #find center of cluster
+
+          new_data_matrix.set_row(i, v)
         }
 
-        v = v / cluster.size #find center of cluster
-
-        new_data_matrix.set_row(i, v)
-      }
-
-      data_matrix = new_data_matrix
+        data_matrix = new_data_matrix
+      else
+        break #our minimum distance < our max distance
+      end
     end
 
     return clusters

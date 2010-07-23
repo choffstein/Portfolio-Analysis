@@ -213,27 +213,123 @@ module Portfolio
       return means_variances
     end
 
-    def income_monte_carlo(periods_forward = 4, n = 10000, block_size = 1)
+    def income_monte_carlo(periods_forward = 4, n = 10000)
       Status.info("Performing portfolio income monte-carlo simulation")
       historic_income = self.to_income_stream
-     
-      # transform the income stream into log returns
-      current_income = historic_income[-1]
+      
+      # take last 10 years of data from income stream -- 40 periods
+      # ignore the latest quarter, because we are probably 'mid-quarter' and
+      # therefore everything is skewed
+      historic_income = historic_income.get((-[40, historic_income.size].min..-2).to_a)
+
+      Rails.logger.info(historic_income.to_a)
+
+      x = GSL::Vector.linspace(0, historic_income.size-1, historic_income.size)
+      weights = x.map { |e| 0.982820599**e }.reverse
+      weights = weights / weights.sum
+
+      #income stream should have exponential growth over time -- so take log
+      #so we can fit a linear estimation
       log_historic_income = historic_income.map { |v| Math.log(v) }
 
-      length = log_historic_income.size
-      log_returns = log_historic_income.get(1,length-1) -
-                                    log_historic_income.get(0,length-1)
+      c0, c1, cov00, cov01, cov11, = GSL::Fit::wlinear(x, weights, log_historic_income)
+
+      distances = GSL::Vector.alloc(x.size)
+      x.size.times { |i|
+        est, = GSL::Fit::linear_est(i, c0, c1, cov00, cov01, cov11)
+        distances[i] = log_historic_income[i] - est
+      }
+      stddev = Math.sqrt(distances.variance)
       
-      # drastically over-weight recent income growth versus historic
-      return monte_carlo(log_returns, current_income,
-                          periods_forward, n, block_size, 0.85)
+      r = GSL::Rng.alloc
+      income = GSL::Matrix.alloc(n, periods_forward)
+
+      estimates = GSL::Vector.alloc(periods_forward)
+      periods_forward.times { |i|
+        est, = GSL::Fit::linear_est(x.size + i, c0, c1, cov00, cov01, cov11)
+        estimates[i] = est
+      }
+
+      n.times { |i|
+        v = GSL::Vector.alloc(periods_forward)
+        err = stddev * r.gaussian(1, periods_forward)
+        income.set_row(i, estimates + err)
+      }
+
+      #get back to income stream values
+      income.map! { |e| Math.exp(e) }
+      
+      # now, for each column, we need a mean and variance
+      means = GSL::Vector.alloc(periods_forward)
+      upside_stddevs = GSL::Vector.alloc(periods_forward)
+      downside_stddevs = GSL::Vector.alloc(periods_forward)
+      periods_forward.times { |i|
+        column = income.column(i)
+        m = column.mean
+        means[i] = m
+
+        offset_column = (column - m).to_a
+        upside_array = offset_column.map { |x| x > 0 ? x : 0 }
+        downside_array = offset_column.map { |x| x < 0 ? x : 0 }
+
+        upside_vector = GSL::Vector.alloc(upside_array)
+        downside_vector = GSL::Vector.alloc(downside_array)
+
+        upside_stddevs[i] = Math.sqrt(upside_vector.variance)
+        downside_stddevs[i] = Math.sqrt(downside_vector.variance)
+      }
+
+      return {:means => means,
+              :upside_standard_deviations => upside_stddevs,
+              :downside_standard_deviations => downside_stddevs }
+      
     end
 
     def return_monte_carlo(periods_forward = 250, n = 10000, block_size = 10)
       Status.info("Performing return monte-carlo simulation on portfolio")
-      return monte_carlo(self.to_log_returns, compute_current_portfolio_value,
-                          periods_forward, n, block_size, 1.0)
+
+      log_returns = self.to_log_returns
+      initial_value = compute_current_portfolio_value
+      weight_factor = 1.0
+
+      series = Statistics::Bootstrap::block_bootstrap(log_returns,
+                                periods_forward, block_size, n, weight_factor)
+
+      # given our current portfolio value and a series of log returns,
+      # we need to come up with a series of portfolio values
+
+      return_series = GSL::Matrix.alloc(n, periods_forward)
+
+      series.size1.times { |i|
+        row = series.row(i)
+        values = row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
+        v = GSL::Vector[*values].cumprod
+        return_series.set_row(i, initial_value * v)
+      }
+
+      # now, for each column, we need a mean and variance
+      means = GSL::Vector.alloc(return_series.size2)
+      upside_stddevs = GSL::Vector.alloc(return_series.size2)
+      downside_stddevs = GSL::Vector.alloc(return_series.size2)
+      return_series.size2.times { |i|
+        column = return_series.column(i)
+        m = column.mean
+        means[i] = m
+
+        offset_column = (column - m).to_a
+        upside_array = offset_column.map { |x| x > 0 ? x : 0 }
+        downside_array = offset_column.map { |x| x < 0 ? x : 0 }
+
+        upside_vector = GSL::Vector.alloc(upside_array)
+        downside_vector = GSL::Vector.alloc(downside_array)
+
+        upside_stddevs[i] = Math.sqrt(upside_vector.variance)
+        downside_stddevs[i] = Math.sqrt(downside_vector.variance)
+      }
+
+      return {:means => means,
+              :upside_standard_deviations => upside_stddevs,
+              :downside_standard_deviations => downside_stddevs }
     end
 
     def current_portfolio_value
@@ -288,50 +384,56 @@ module Portfolio
 
       return volatilities.mean
     end
+
+    def compute_draw_down_correlation
+      compute_log_returns if @log_returns.nil?
+      n = @log_returns.size1
+      m = @log_returns.size2
+
+      draw_downs = GSL::Matrix.alloc(n, m)
+      n.times { |i|
+        maximum = 0
+        cumsum = 0
+
+        m.times { |j|
+          cumsum = cumsum + @log_returns[i,j]
+
+          if cumsum > maximum
+            maximum = cumsum
+          end
+          draw_downs[i,j] = cumsum - maximum
+        }
+      }
+
+      draw_down_correlation_matrix = GSL::Matrix.alloc(n, n)
+      n.times { |i|
+        i.upto(n-1) { |j|
+          corr = GSL::Stats::correlation(draw_downs.row(i), draw_downs.row(j))
+          draw_down_correlation_matrix[i,j] = corr
+          draw_down_correlation_matrix[j,i] = corr #symmetric matrix
+        }
+      }
+
+      s = GSL::Matrix.alloc(n,n).set_all(0.0)
+      xk = draw_down_correlation_matrix
+      yk = nil
+      begin
+        yk = xk
+        rk = yk - s
+
+        lambda, q = rk.eigen_symmv
+        lambda = GSL::Matrix.diagonal(lambda.map { |e| [e, 0.0].max })
+
+        xk = q * lambda * q.transpose
+        s = xk - rk
+        xk.diagonal.set_all(1.0) #set diagonals to 1
+
+      end while (xk - yk).norm > 1e-12
+
+      return xk
+    end
     
     private
-
-    def monte_carlo(log_returns, initial_value, periods_forward = 1250,
-                      n = 2500, block_size = 25, weight_factor = 1.0)
-      series = Statistics::Bootstrap::block_bootstrap(log_returns,
-                                periods_forward, block_size, n, weight_factor)
-
-      # given our current portfolio value and a series of log returns,
-      # we need to come up with a series of portfolio values
-
-      return_series = GSL::Matrix.alloc(n, periods_forward)
-
-      series.size1.times { |i|
-        row = series.row(i)
-        values = row.to_a.map { |i| log_returns.get(i.to_i, block_size).to_a }.flatten.map { |e| Math.exp(e) }
-        v = GSL::Vector[*values].cumprod
-        return_series.set_row(i, initial_value * v)
-      }
-
-      # now, for each column, we need a mean and variance
-      means = GSL::Vector.alloc(return_series.size2)
-      upside_stddevs = GSL::Vector.alloc(return_series.size2)
-      downside_stddevs = GSL::Vector.alloc(return_series.size2)
-      return_series.size2.times { |i|
-        column = return_series.column(i)
-        m = column.mean
-        means[i] = m
-
-        offset_column = (column - m).to_a
-        upside_array = offset_column.map { |x| x > 0 ? x : 0 }
-        downside_array = offset_column.map { |x| x < 0 ? x : 0 }
-
-        upside_vector = GSL::Vector.alloc(upside_array)
-        downside_vector = GSL::Vector.alloc(downside_array)
-
-        upside_stddevs[i] = Math.sqrt(upside_vector.variance)
-        downside_stddevs[i] = Math.sqrt(downside_vector.variance)
-      }
-
-      return {:means => means,
-              :upside_standard_deviations => upside_stddevs,
-              :downside_standard_deviations => downside_stddevs }
-    end
 
     # compute the current weights of the portfolio
     def compute_weights
@@ -367,7 +469,6 @@ module Portfolio
           }
         }
       end unless !@log_returns.nil?
-
     end
         
     # Assumes @log_returns is filled
