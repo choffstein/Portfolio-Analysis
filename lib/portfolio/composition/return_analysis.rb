@@ -134,8 +134,20 @@ module Portfolio
       def self.pca(portfolio_state)
         #compute the eigen-vals and eigen-vects
         eigen_values, eigen_vectors = portfolio_state.sample_correlation_matrix.eigen_symmv
+
+        m = eigen_values.size
         eigen_values.map! { |e| [e, 0.0].max }
         
+        percent_variance = eigen_values.abs / eigen_values.abs.sum
+
+        # get rid of anything that represents less than 2.5% of the variance
+        percent_variance.to_a.each_with_index { |p,i|
+          if p < 0.025
+            eigen_vectors.set_col(i, GSL::Vector.calloc(m))
+            eigen_values[i] = 0
+          end
+        }
+
         percent_variance = eigen_values.abs / eigen_values.abs.sum
 
         return [eigen_values, percent_variance, eigen_vectors]
