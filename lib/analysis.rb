@@ -761,21 +761,27 @@ module Analysis
     eigen_values, percent_variance, eigen_vectors =
       Portfolio::Composition::ReturnAnalysis::pca(state)
 
+=begin
+    w, h = state.sample_correlation_matrix.nmf(25)
+    Rails.logger.info(w)
+    Rails.logger.info(h)
+    Rails.logger.info(w*h)
+
+    Rails.logger.info(GSL::Matrix::NMF.difcost(state.sample_correlation_matrix, w*h))
+=end
+    
     #should we be sqrting the eigen-values here?
-    m = eigen_vectors * GSL::Matrix.diagonal(eigen_values)
+    m = eigen_vectors * GSL::Matrix.diagonal(eigen_values.map { |e| Math.sqrt(e) })
     #identify which dimension to associate a holding with
-    identified_dimension = Array.new(tickers.size)
+    positions = GSL::Matrix.alloc(tickers.size, m.size2)
     tickers.size.times { |i|
       # take the eigen_vector matrix
       # and for each column in our correlation matrix,
       # solve for our betas.  find the max beta, and use that as
       # our identified dimension
       c, cov, chisq, status = GSL::MultiFit::linear(m, state.sample_correlation_matrix.column(i))
-      idx =  c.map {|e| e.abs }.sort_index[-1]
-      identified_dimension[i] = c[idx] > 0 ? idx : -idx
+      positions.set_row(i, c)
     }
-
-    unique_dimensions = identified_dimension.uniq.sort
 
     n_holdings = tickers.size
     n_dimensions = 2
@@ -805,7 +811,7 @@ module Analysis
         }
       }
 
-      (state.sample_correlation_matrix - cosine_matrix).norm
+      state.weights * (state.sample_correlation_matrix - cosine_matrix).map{|e| e**2} * state.weights.col
     }
 
     my_func = GSL::MultiMin::Function.alloc(my_f, number_of_dimensions)
@@ -836,7 +842,7 @@ module Analysis
     Magick::Draw.new.fill('#000000').circle(501/2,501/2,0,501/2).draw(img)
     positions.size1.times { |i|
       position = positions.row(i)
-      Magick::Draw.new.stroke("##{colors[i]}").stroke_width(1).line(501/2,501/2,501/2*(1 + position[0]), 501/2*(1 + position[1])).draw(img)
+      Magick::Draw.new.stroke("##{colors[i]}").stroke_width((Math.sqrt(50*state.weights[i])).ceil).line(501/2,501/2,501/2*(1 + position[0]), 501/2*(1 + position[1])).draw(img)
     }
     img.write('public/images/portfolio/correlation_circle.png')
 
@@ -860,8 +866,7 @@ module Analysis
           cosine_matrix[j,i] = cosine_matrix[i,j]
         }
       }
-
-      (dd_correlation_matrix - cosine_matrix).norm
+      state.weights * (dd_correlation_matrix - cosine_matrix).map{|e| e**2} * state.weights.col
     }
 
     my_func = GSL::MultiMin::Function.alloc(my_f, number_of_dimensions)
@@ -892,66 +897,13 @@ module Analysis
     Magick::Draw.new.fill('#000000').circle(501/2,501/2,0,501/2).draw(img)
     positions.size1.times { |i|
       position = positions.row(i)
-      Magick::Draw.new.stroke("##{colors[i]}").stroke_width(1).line(501/2,501/2,501/2*(1 + position[0]), 501/2*(1 + position[1])).draw(img)
+      Magick::Draw.new.stroke("##{colors[i]}").stroke_width((Math.sqrt(50*state.weights[i])).ceil).line(501/2,501/2,501/2*(1 + position[0]), 501/2*(1 + position[1])).draw(img)
     }
     img.write('public/images/portfolio/dd_correlation_circle.png')
 
     #######################
 
-    n_holdings = tickers.size
-    n_dimensions = 3
-
-    number_of_dimensions = n_holdings * n_dimensions
-
-    # preallocate -- which means we can't go multithreaded here...
-    cosine_matrix = GSL::Matrix.calloc(n_holdings, n_holdings)
-    positions = GSL::Matrix.calloc(n_holdings, n_dimensions)
-
-    my_f = Proc.new { |fly_position|
-      tickers.size.times { |i|
-        v = fly_position.get(i*n_dimensions, n_dimensions).normalize
-        positions.set_row(i, v)
-      }
-
-      # now that the positions are set, find the cosine matrix
-      tickers.size.times { |i|
-        a = positions.row(i)
-        cosine_matrix[i,i] = 1.0
-        (i+1).upto(tickers.size-1) { |j|
-          b = positions.row(j)
-          cosine_matrix[i,j] = a * b.transpose
-          cosine_matrix[j,i] = cosine_matrix[i,j]
-        }
-      }
-
-      (state.sample_correlation_matrix - cosine_matrix).norm
-    }
-
-    my_func = GSL::MultiMin::Function.alloc(my_f, number_of_dimensions)
-
-    x = GSL::Vector.alloc(Array.new(number_of_dimensions).map! {rand})
-    ss = GSL::Vector.alloc(number_of_dimensions)
-    ss.set_all(1.0)
-
-    minimizer = GSL::MultiMin::FMinimizer.alloc("nmsimplex", number_of_dimensions)
-    minimizer.set(my_func, x, ss)
-
-    Status.info("Minimizing projected distance to correlation matrix in #{n_dimensions} dimensions")
-    begin
-      status = minimizer.iterate()
-      status = minimizer.test_size(1e-2)
-    end while status == GSL::CONTINUE
-    Status.info("FVal: #{minimizer.fval}")
-
-    features = minimizer.x
-
-    positions = GSL::Matrix.alloc(n_holdings, n_dimensions)
-    tickers.size.times { |i|
-      v = features.get(i*n_dimensions, n_dimensions).normalize
-      positions.set_row(i, v)
-    }
-
-    clusters = Cluster.hierarchical(positions, unique_dimensions.size)
+    clusters = Cluster.hierarchical(positions, Math.sqrt(tickers.size))
     identified_clusters = {}
     clusters.each_with_index { |e,i|
       e.each { |j|
@@ -983,7 +935,7 @@ module Analysis
     # ideal number of clusters is?  Math.sqrt(ticker.size)
     # and ideally, the amount of wealth in each cluster would be equal
     return { :identified_clusters => identified_clusters,
-      :num_unique_clusters => unique_dimensions.size,
+      :num_unique_clusters => clusters.size,
       :file_name => file_name,
       :score => score,
       :correlation_circles => ['portfolio/correlation_circle.png',
